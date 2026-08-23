@@ -1,0 +1,135 @@
+@import "tailwindcss";
+
+@custom-variant dark (&:where(.dark, .dark *));
+
+html {
+  color-scheme: light dark;
+}
+
+body {
+  background-color: #f8fafc;
+  color: #0f172a;
+  font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+.dark body,
+html.dark body {
+  background-color: #020617;
+  color: #f8fafc;
+}
+
+@page {
+  size: A4 portrait;
+  margin: 15mm 15mm 20mm 15mm;
+}
+
+/* Custom modern scrollbars */
+::-webkit-scrollbar {
+  width: 7px;
+  height: 7px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: rgba(100, 116, 139, 0.3);
+  border-radius: 4px;
+}
+.dark ::-webkit-scrollbar-thumb {
+  background: rgba(236, 72, 153, 0.35);
+}
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(100, 116, 139, 0.5);
+}
+.dark ::-webkit-scrollbar-thumb:hover {
+  background: rgba(244, 63, 94, 0.6);
+}
+
+/* Neon glow helper classes */
+.neon-glow-pink {
+  box-shadow: 0 0 15px -3px rgba(236, 72, 153, 0.35), 0 0 6px -2px rgba(236, 72, 153, 0.2);
+}
+.neon-glow-cyan {
+  box-shadow: 0 0 15px -3px rgba(6, 182, 212, 0.35), 0 0 6px -2px rgba(6, 182, 212, 0.2);
+}
+.neon-glow-yellow {
+  box-shadow: 0 0 15px -3px rgba(250, 204, 21, 0.35), 0 0 6px -2px rgba(250, 204, 21, 0.2);
+}
+
+@media print {
+  html, body {
+    width: 210mm;
+    margin: 0 !important;
+    padding: 0 !important;
+    background: #ffffff !important;
+    color: #0f172a !important;
+    font-size: 10.5pt;
+    line-height: 1.5;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+  
+  .print\:hidden {
+    display: none !important;
+  }
+
+  .print\:block {
+    display: block !important;
+  }
+
+  .print\:p-0 {
+    padding: 0 !important;
+  }
+
+  .print\:m-0 {
+    margin: 0 !important;
+  }
+
+  .print\:shadow-none {
+    box-shadow: none !important;
+  }
+
+  .print\:border-none {
+    border: none !important;
+  }
+
+  .print\:break-before-page {
+    page-break-before: always !important;
+    break-before: page !important;
+  }
+
+  .print\:break-inside-avoid {
+    page-break-inside: avoid !important;
+    break-inside: avoid !important;
+  }
+}
+
+/* Authentic A4 preview sheet simulation */
+.a4-sheet {
+  width: 210mm;
+  min-height: 297mm;
+  padding: 18mm 18mm 20mm 18mm;
+  margin: 0 auto 24px auto;
+  background: white;
+  color: #0f172a;
+  box-shadow: 0 4px 20px -2px rgba(15, 23, 42, 0.08), 0 2px 6px -1px rgba(15, 23, 42, 0.04);
+  box-sizing: border-box;
+}
+
+@media print {
+  .a4-sheet {
+    width: 100% !important;
+    min-height: auto !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    box-shadow: none !important;
+    page-break-before: always;
+    break-before: page;
+  }
+  .a4-sheet:first-child {
+    page-break-before: auto !important;
+    break-before: auto !important;
+  }
+}

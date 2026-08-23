@@ -10,9 +10,9 @@ permissions:
   pages: write
   id-token: write
   packages: write
-  
+
 env:
-  ACTIONS_ALLOW_USE_UNSECURE_NODE_VERSION: true #removes warning about depreciation.  
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
 jobs:
   # Job 1: Build and Deploy to GitHub Pages

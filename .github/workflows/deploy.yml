@@ -20,10 +20,11 @@ jobs:
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 24
+          cache: 'npm'
       - name: Install & Build
         run: |
-          npm install
+          npm ci
           npm run build
       - name: Setup Pages
         uses: actions/configure-pages@v4
@@ -38,7 +39,7 @@ jobs:
   # Job 2: Build and Push Docker Image to GHCR
   publish-docker:
     runs-on: ubuntu-latest
-    if: github.event_name == 'push' # Runs on every push to main
+    if: github.event_name == 'push'
     steps:
       - uses: actions/checkout@v4
       - name: Log in to GHCR
@@ -62,4 +63,3 @@ jobs:
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
-          

@@ -14,16 +14,29 @@ export interface PdfGenerationOptions {
 }
 
 /**
- * Strips markdown formatting for clean plain-text measurement
+ * Strips markdown formatting, inline HTML tags, and attribute IDs for clean plain-text PDF layout
  */
 function cleanInlineMarkdown(text: string): string {
   return text
+    // Strip inline HTML tags e.g. <font color="...">text</font>, <u style="...">text</u>, <span ...>
+    .replace(/<[^>]+>/g, '')
+    // Strip Python-Markdown / MkDocs anchor header attribute blocks e.g. "{ #code-blocks }" or "{: #custom-id }"
+    .replace(/\s*\{:?\s*#[a-zA-Z0-9_-]+[^}]*\}\s*$/g, '')
+    .replace(/\s*\{\s*#[a-zA-Z0-9_-]+\s*\}\s*/g, '')
+    // Standard markdown inline styling
     .replace(/\*\*(.*?)\*\*/g, '$1')
     .replace(/\*(.*?)\*/g, '$1')
     .replace(/__(.*?)__/g, '$1')
     .replace(/_(.*?)_/g, '$1')
     .replace(/`([^`]+)`/g, '$1')
     .replace(/\[([^\]]+)\]\([^\)]+\)/g, '$1')
+    // Common HTML entities
+    .replace(/&quot;/g, '"')
+    .replace(/&amp;/g, '&')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&#39;/g, "'")
+    .replace(/&nbsp;/g, ' ')
     .trim();
 }
 
@@ -316,13 +329,64 @@ export async function generateA4PdfFromDocuments(
       }
 
       if (inCodeBlock) {
-        codeBlockLines.push(line);
+        // Strip inline HTML formatting like <font color="..."> or <u> tags from code snippet lines
+        codeBlockLines.push(line.replace(/<[^>]+>/g, ''));
+        continue;
+      }
+
+      // Skip standalone closing slashes or markdown attribute metadata
+      if (
+        trimmed === '////' ||
+        trimmed === '///' ||
+        trimmed === ':::' ||
+        trimmed.startsWith(':new:') ||
+        trimmed.startsWith(':upgrade:') ||
+        trimmed.startsWith(':icon:')
+      ) {
         continue;
       }
 
       // Empty Line
       if (!trimmed) {
         currentY += 2.5;
+        continue;
+      }
+
+      // MkDocs & MDX Content Tab headers: "//// tab | Title", "/// tab | Title", "##### Tab: Title", "=== 'Title'"
+      if (
+        trimmed.startsWith('//// tab |') ||
+        trimmed.startsWith('/// tab |') ||
+        trimmed.startsWith('##### Tab:') ||
+        trimmed.startsWith('=== ')
+      ) {
+        const tabTitle = cleanInlineMarkdown(
+          trimmed
+            .replace(/^(\/{3,4}\s*tab\s*\|\s*|#{1,6}\s*Tab:\s*|===\s*["']?)/i, '')
+            .replace(/["']$/, '')
+        );
+        ensureSpace(12, file.newName);
+
+        // Draw stylish tab pill container
+        pdf.setFillColor(241, 245, 249); // slate-100
+        pdf.setDrawColor(203, 213, 225); // slate-300
+        pdf.roundedRect(marginMm, currentY, contentWidth, 7, 1.2, 1.2, 'FD');
+
+        // Cyan pill badge
+        pdf.setFillColor(6, 182, 212); // cyan-500
+        pdf.roundedRect(marginMm + 2, currentY + 1.2, 11, 4.6, 1, 1, 'F');
+        pdf.setFont('helvetica', 'bold');
+        pdf.setFontSize(6.5);
+        pdf.setTextColor(255, 255, 255);
+        pdf.text('TAB', marginMm + 3.8, currentY + 4.4);
+
+        // Tab Title
+        pdf.setFont('helvetica', 'bold');
+        pdf.setFontSize(8.5);
+        pdf.setTextColor(30, 41, 59); // slate-800
+        const tabTitleTrunc = tabTitle.length > 55 ? tabTitle.slice(0, 52) + '...' : tabTitle;
+        pdf.text(tabTitleTrunc, marginMm + 16, currentY + 4.7);
+
+        currentY += 10;
         continue;
       }
 
@@ -336,7 +400,7 @@ export async function generateA4PdfFromDocuments(
         continue;
       }
 
-      // Headings
+      // Headings (cleanInlineMarkdown strips { #anchor-id } attributes automatically)
       if (trimmed.startsWith('# ')) {
         ensureSpace(14, file.newName);
         const text = cleanInlineMarkdown(trimmed.replace(/^#\s+/, ''));
@@ -378,12 +442,24 @@ export async function generateA4PdfFromDocuments(
         continue;
       }
 
-      // Blockquotes
+      if (trimmed.startsWith('#### ')) {
+        ensureSpace(9, file.newName);
+        const text = cleanInlineMarkdown(trimmed.replace(/^####\s+/, ''));
+        pdf.setFont('helvetica', 'bold');
+        pdf.setFontSize(9.5);
+        pdf.setTextColor(71, 85, 105);
+        const wrapped = pdf.splitTextToSize(text, contentWidth);
+        pdf.text(wrapped, marginMm, currentY);
+        currentY += wrapped.length * 4.2 + 2;
+        continue;
+      }
+
+      // Blockquotes & Admonitions (> **[INFO]**)
       if (trimmed.startsWith('>')) {
         ensureSpace(10, file.newName);
         const quoteText = cleanInlineMarkdown(trimmed.replace(/^>\s*/, ''));
-        pdf.setFont('helvetica', 'italic');
-        pdf.setFontSize(9.5);
+        pdf.setFont('helvetica', quoteText.includes('[') ? 'bold' : 'italic');
+        pdf.setFontSize(9);
         pdf.setTextColor(71, 85, 105);
         const wrapped = pdf.splitTextToSize(quoteText, contentWidth - 8);
         const quoteHeight = wrapped.length * 4.2 + 3;
@@ -391,7 +467,16 @@ export async function generateA4PdfFromDocuments(
         pdf.setFillColor(248, 250, 252);
         pdf.rect(marginMm + 2, currentY - 2, contentWidth - 2, quoteHeight, 'F');
 
-        pdf.setFillColor(6, 182, 212); // cyan-500 accent bar
+        // Dynamic accent bar color depending on callout tag
+        if (quoteText.includes('[WARNING]') || quoteText.includes('[CAUTION]')) {
+          pdf.setFillColor(245, 158, 11); // amber-500
+        } else if (quoteText.includes('[DANGER]') || quoteText.includes('[ALERT]') || quoteText.includes('[CRITICAL]')) {
+          pdf.setFillColor(239, 68, 68); // red-500
+        } else if (quoteText.includes('[TIP]') || quoteText.includes('[SUCCESS]') || quoteText.includes('[CHECK]')) {
+          pdf.setFillColor(16, 185, 129); // emerald-500
+        } else {
+          pdf.setFillColor(6, 182, 212); // cyan-500
+        }
         pdf.rect(marginMm, currentY - 2, 1.5, quoteHeight, 'F');
 
         pdf.text(wrapped, marginMm + 6, currentY + 2);

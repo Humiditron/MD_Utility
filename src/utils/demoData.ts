@@ -30,17 +30,37 @@ This suite provides modern tooling for microservices and cloud deployments.
     },
     {
       path: `${repoFolder}/docs/getting-started/quickstart.md`,
-      content: `# Quickstart Guide
+      content: `# Quickstart Guide { #quickstart-guide }
 
 Get up and running in less than 5 minutes.
 
-\`\`\`bash
-npm install @acme/core
-acme init my-app
-\`\`\`
+//// tab | Python 3.10+
+\`\`\`python
+from fastapi import FastAPI
 
-## Initial Setup
-Ensure Node.js 18+ is installed on your local workstation.
+app = FastAPI()
+
+@app.get("/")
+def read_root():
+    return {"message": "Hello World"}
+\`\`\`
+////
+
+//// tab | Python 3.9+
+\`\`\`python
+from typing import Union
+from fastapi import FastAPI
+
+app = FastAPI()
+\`\`\`
+////
+
+## Initial Setup { #initial-setup }
+Ensure Python 3.10+ is installed on your local workstation.
+
+\`\`\`bash
+$ <font color="#4E9A06">fastapi</font> run <u style="text-decoration-style:solid">main.py</u>
+\`\`\`
 
 ![CLI Setup Workflow](../images/cli-workflow.svg)
 

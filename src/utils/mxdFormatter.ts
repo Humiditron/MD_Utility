@@ -221,11 +221,11 @@ export function formatMxdToMarkdown(
       return `\`[${innerText.trim()}]\``;
     });
 
-    // D. Tabs & TabItem: <Tabs><TabItem label="npm">content</TabItem></Tabs>
+    // D. Tabs & TabItem (MDX / JSX): <Tabs><TabItem label="npm">content</TabItem></Tabs>
     const tabsRegex = /<Tabs(?:\s+[^>]*)?>([\s\S]*?)<\/Tabs>/gi;
     body = body.replace(tabsRegex, (_match, innerTabs) => {
       stats.jsxElementsConverted++;
-      const itemRegex = /<TabItem\s+label=["']([^"']+)["'](?:\s+[^>]*)?>([\s\S]*?)<\/TabItem>/gi;
+      const itemRegex = /<TabItem\s+(?:label|value)=["']([^"']+)["'](?:\s+[^>]*)?>([\s\S]*?)<\/TabItem>/gi;
       let tabBlocks = '';
       let match;
       while ((match = itemRegex.exec(innerTabs)) !== null) {
@@ -235,6 +235,69 @@ export function formatMxdToMarkdown(
       }
       return tabBlocks || innerTabs;
     });
+
+    // D2. MkDocs Material & FastAPI Content Tabs: "//// tab | Title" or "/// tab | Title"
+    const mkdocsTabRegex = /^[ \t]*\/{3,4}\s*tab\s*\|\s*(.*?)[ \t]*\r?\n([\s\S]*?)(?:^[ \t]*\/{3,4}[ \t]*$|(?=^[ \t]*\/{3,4}\s*tab\s*\|))/gm;
+    body = body.replace(mkdocsTabRegex, (_match, tabTitle, tabBody) => {
+      stats.jsxElementsConverted++;
+      const cleanTitle = tabTitle.trim().replace(/^['"]|['"]$/g, '');
+      // Strip any option annotations like "    :new: 0.100.0" or "    :upgrade:"
+      const cleanBody = tabBody.replace(/^[ \t]*:[a-zA-Z0-9_-]+:[^\r\n]*\r?\n?/gm, '').trim();
+      return `\n\n##### Tab: ${cleanTitle}\n\n${cleanBody}\n\n`;
+    });
+
+    // Clean any remaining standalone closing "///" or "////"
+    body = body.replace(/^[ \t]*\/{3,4}[ \t]*\r?\n?/gm, '\n');
+
+    // D3. Classic MkDocs Tabbed Syntax: === "Tab Title"
+    const classicTabRegex = /^[ \t]*===\s*["']([^"']+)["'](?:\s*:[\w-]+:)?\r?\n/gm;
+    body = body.replace(classicTabRegex, (_match, title) => {
+      stats.jsxElementsConverted++;
+      return `\n\n##### Tab: ${title.trim()}\n\n`;
+    });
+
+    // D4. MkDocs / FastAPI Slashed Admonitions: "/// info | Title" or "/// note" ... "///"
+    const mkdocsAdmonitionRegex = /^[ \t]*\/{3,4}\s*(note|info|tip|warning|danger|caution|important|check|example|quote|details|abstract|success|failure|bug)(?:\s*\|\s*([^\r\n]*))?[ \t]*\r?\n([\s\S]*?)(?:^[ \t]*\/{3,4}[ \t]*$|(?=^[ \t]*\/{3,4}\s*(?:note|info|tip|warning|danger|caution|important|check|example|quote|details|abstract|success|failure|bug|tab)))/gim;
+    body = body.replace(mkdocsAdmonitionRegex, (_match, tag, title, admonitionBody) => {
+      stats.jsxElementsConverted++;
+      const tagUpper = tag.toUpperCase();
+      const titleStr = title ? ` ${title.trim()}` : '';
+      const cleanBody = admonitionBody.trim();
+      const quoted = cleanBody.split('\n').map((line: string) => `> ${line}`).join('\n');
+      return `\n\n> **[${tagUpper}]${titleStr}**\n${quoted}\n\n`;
+    });
+
+    // D5. Docusaurus / Markdown-it Triple Colon Admonitions: :::info[Title] ... :::
+    const colonAdmonitionRegex = /^[ \t]*:::\s*(note|info|tip|warning|danger|caution|important|details)(?:\[(.*?)\]|[\s:]([^\r\n]*))?\r?\n([\s\S]*?)^[ \t]*:::[ \t]*$/gim;
+    body = body.replace(colonAdmonitionRegex, (_match, tag, bracketTitle, spaceTitle, calloutBody) => {
+      stats.jsxElementsConverted++;
+      const tagUpper = tag.toUpperCase();
+      const title = (bracketTitle || spaceTitle || '').trim();
+      const titleStr = title ? ` ${title}` : '';
+      const quoted = calloutBody.trim().split('\n').map((line: string) => `> ${line}`).join('\n');
+      return `\n\n> **[${tagUpper}]${titleStr}**\n${quoted}\n\n`;
+    });
+
+    // D6. Classic MkDocs Admonitions: !!! note "Title" or ???+ info "Title"
+    const classicAdmonitionRegex = /^[ \t]*(?:!|\?){3}\+?\s*(note|info|tip|warning|danger|caution|important|question|faq|quote|example)\s*(?:"([^"]*)"|'([^']*)')?[ \t]*\r?\n/gim;
+    body = body.replace(classicAdmonitionRegex, (_match, tag, title1, title2) => {
+      stats.jsxElementsConverted++;
+      const title = (title1 || title2 || '').trim();
+      const titleStr = title ? ` ${title}` : '';
+      return `\n\n> **[${tag.toUpperCase()}]${titleStr}**\n>\n`;
+    });
+
+    // D7. Strip Python-Markdown / MkDocs header attribute anchor IDs: e.g. "## code blocks { #code-blocks }" or "{: #custom-id }"
+    body = body.replace(/\s*\{:?\s*#[a-zA-Z0-9_-]+(?:\s+[.#a-zA-Z0-9_-]+)*\s*\}\s*$/gm, '');
+    body = body.replace(/\s*\{\s*#[a-zA-Z0-9_-]+\s*\}\s*/g, '');
+
+    // D8. Clean / Normalize Inline HTML tags (<font>, <u>, <span>, <kbd>, <center>)
+    body = body.replace(/<font(?:\s+[^>]*)?>([\s\S]*?)<\/font>/gi, '$1');
+    body = body.replace(/<u(?:\s+[^>]*)?>([\s\S]*?)<\/u>/gi, '_$1_');
+    body = body.replace(/<span(?:\s+[^>]*)?>([\s\S]*?)<\/span>/gi, '$1');
+    body = body.replace(/<kbd(?:\s+[^>]*)?>([\s\S]*?)<\/kbd>/gi, '`$1`');
+    body = body.replace(/<center(?:\s+[^>]*)?>([\s\S]*?)<\/center>/gi, '$1');
+    body = body.replace(/<a\s+name=["'][^"']*["']\s*(?:\/|>\s*<\/a>)>?/gi, '');
 
     // E. Cards: <Card title="Title" href="...">Content</Card>
     const cardRegex = /<Card\s+title=["']([^"']+)["'](?:\s+href=["']([^"']+)["'])?(?:\s+[^>]*)?>([\s\S]*?)<\/Card>/gi;

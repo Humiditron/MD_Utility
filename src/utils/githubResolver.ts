@@ -121,20 +121,16 @@ export async function resolveGitHubDirectory(
   // Step 1: Detect branch if not provided in URL
   if (!branch) {
     try {
-      const repoRes = await fetch(`https://api.github.com/repos/${owner}/${repo}`, { headers });
-      if (!repoRes.ok) {
-        if (repoRes.status === 404) {
-          throw new Error(`Repository "${owner}/${repo}" was not found or is private.`);
-        }
-        if (repoRes.status === 403) {
-          throw new Error('GitHub API rate limit reached. Add a Personal Access Token or try again shortly.');
-        }
-        throw new Error(`GitHub API error (${repoRes.status}): ${repoRes.statusText}`);
+      const repoRes = await fetch(`https://api.github.com/repos/${owner}/${repo}`, {
+        headers: token ? { Authorization: `Bearer ${token.trim()}` } : undefined,
+      });
+      if (repoRes.ok) {
+        const repoData = await repoRes.json();
+        branch = repoData.default_branch || 'main';
+      } else {
+        branch = 'main';
       }
-      const repoData = await repoRes.json();
-      branch = repoData.default_branch || 'main';
-    } catch (e: any) {
-      if (e?.message?.includes('GitHub API') || e?.message?.includes('Repository')) throw e;
+    } catch {
       branch = 'main'; // fallback
     }
   }
@@ -147,22 +143,113 @@ export async function resolveGitHubDirectory(
     message: `Fetching file tree for "${branch}" branch ${subPath ? `in /${subPath}` : ''}...`,
   });
 
-  // Step 2: Fetch recursive Git tree
-  const treeUrl = `https://api.github.com/repos/${owner}/${repo}/git/trees/${branch}?recursive=1`;
-  const treeRes = await fetch(treeUrl, { headers });
+  // Step 2: Fetch recursive Git tree (Primary: GitHub API, Fallback: jsDelivr CDN Data API)
+  let rawTree: Array<{ path: string; type: string; size?: number; sha?: string }> = [];
+  let fetchedViaFallback = false;
 
-  if (!treeRes.ok) {
-    if (treeRes.status === 404) {
-      throw new Error(`Branch or tree "${branch}" not found in ${owner}/${repo}.`);
+  try {
+    const treeUrl = `https://api.github.com/repos/${owner}/${repo}/git/trees/${branch}?recursive=1`;
+    const treeHeaders: Record<string, string> = {};
+    if (token && token.trim()) {
+      treeHeaders.Authorization = `Bearer ${token.trim()}`;
     }
-    if (treeRes.status === 403) {
-      throw new Error('GitHub API rate limit exceeded. Provide a GitHub Access Token in options to continue.');
+
+    const treeRes = await fetch(treeUrl, { headers: treeHeaders });
+
+    if (treeRes.ok) {
+      const treeData = await treeRes.json();
+      rawTree = treeData.tree || [];
+    } else if (treeRes.status === 404 && branch === 'main') {
+      // Try master branch if main gave 404
+      const masterTreeRes = await fetch(
+        `https://api.github.com/repos/${owner}/${repo}/git/trees/master?recursive=1`,
+        { headers: treeHeaders }
+      );
+      if (masterTreeRes.ok) {
+        const masterTreeData = await masterTreeRes.json();
+        rawTree = masterTreeData.tree || [];
+        branch = 'master';
+      } else {
+        throw new Error(`Branch or tree "${branch}" not found in ${owner}/${repo}.`);
+      }
+    } else if (treeRes.status === 403 || treeRes.status === 429) {
+      throw new Error('RATE_LIMIT');
+    } else {
+      throw new Error(`GitHub API returned status ${treeRes.status}`);
     }
-    throw new Error(`Failed to fetch file tree from GitHub (${treeRes.status}).`);
+  } catch (err: any) {
+    // If GitHub API failed (CORS error, NetworkError, Rate limit, or Adblocker)
+    // Attempt fallback via jsDelivr Public Open Source Package API (CORS enabled worldwide)
+    try {
+      onProgress?.({
+        stage: 'reading',
+        processedCount: 0,
+        totalCount: 1,
+        percent: 18,
+        message: `Connecting via fallback documentation mirror for ${owner}/${repo}...`,
+      });
+
+      // Try flat endpoint first
+      let cdnRes = await fetch(`https://data.jsdelivr.com/v1/packages/gh/${owner}/${repo}@${branch}/flat`);
+      if (!cdnRes.ok && branch === 'main') {
+        cdnRes = await fetch(`https://data.jsdelivr.com/v1/packages/gh/${owner}/${repo}@master/flat`);
+        if (cdnRes.ok) branch = 'master';
+      }
+
+      if (cdnRes.ok) {
+        const cdnData = await cdnRes.json();
+        if (Array.isArray(cdnData.files)) {
+          rawTree = cdnData.files.map((f: any) => ({
+            path: (f.name || '').replace(/^\/+/, ''),
+            type: 'blob',
+            size: f.size || 0,
+          }));
+          fetchedViaFallback = true;
+        }
+      } else {
+        // Try tree structure endpoint
+        const treeCdnRes = await fetch(`https://data.jsdelivr.com/v1/packages/gh/${owner}/${repo}@${branch}`);
+        if (treeCdnRes.ok) {
+          const treeCdnData = await treeCdnRes.json();
+          const extractedPaths: Array<{ path: string; type: string; size?: number }> = [];
+
+          const extractItems = (items: any[], currentPrefix: string) => {
+            for (const item of items) {
+              const fullPath = currentPrefix ? `${currentPrefix}/${item.name}` : item.name;
+              if (item.type === 'directory' && Array.isArray(item.files)) {
+                extractItems(item.files, fullPath);
+              } else {
+                extractedPaths.push({
+                  path: fullPath.replace(/^\/+/, ''),
+                  type: 'blob',
+                  size: item.size || 0,
+                });
+              }
+            }
+          };
+
+          if (Array.isArray(treeCdnData.files)) {
+            extractItems(treeCdnData.files, '');
+            rawTree = extractedPaths;
+            fetchedViaFallback = true;
+          }
+        }
+      }
+    } catch {
+      // Fallback failed as well
+    }
+
+    if (rawTree.length === 0) {
+      if (err?.message === 'RATE_LIMIT') {
+        throw new Error(
+          'GitHub API rate limit reached for your IP address. Please click "Add Token (Optional)" to supply a GitHub Personal Access Token, or upload the repository as a ZIP archive.'
+        );
+      }
+      throw new Error(
+        `Unable to fetch file tree for ${owner}/${repo} (${err?.message || 'Network / CORS error'}). If this repository is private, please provide a GitHub Personal Access Token.`
+      );
+    }
   }
-
-  const treeData = await treeRes.json();
-  const rawTree: Array<{ path: string; type: string; size?: number; sha: string }> = treeData.tree || [];
 
   // Filter blobs in target subPath and with target extensions
   const matchingBlobs = rawTree.filter(item => {
@@ -208,9 +295,10 @@ export async function resolveGitHubDirectory(
   let totalMxdConverted = 0;
   const CONCURRENCY = 6;
 
-  // Function to download a single file
+  // Function to download a single file with multi-mirror fallback
   const downloadBlob = async (blobItem: typeof matchingBlobs[0], index: number): Promise<DocFile> => {
     const rawUrl = `https://raw.githubusercontent.com/${owner}/${repo}/${branch}/${blobItem.path}`;
+    const cdnUrl = `https://cdn.jsdelivr.net/gh/${owner}/${repo}@${branch}/${blobItem.path}`;
     let rawContent = '';
 
     try {
@@ -218,27 +306,47 @@ export async function resolveGitHubDirectory(
         headers: token ? { Authorization: `Bearer ${token}` } : undefined,
       });
 
-      if (!rawRes.ok) {
-        // Fallback to GitHub API blob endpoint
-        const blobApiUrl = `https://api.github.com/repos/${owner}/${repo}/git/blobs/${blobItem.sha}`;
-        const blobApiRes = await fetch(blobApiUrl, { headers });
-        if (blobApiRes.ok) {
-          const blobData = await blobApiRes.json();
-          if (blobData.encoding === 'base64') {
-            rawContent = decodeURIComponent(
-              escape(atob(blobData.content.replace(/\s/g, '')))
-            );
-          } else {
-            rawContent = blobData.content;
-          }
-        } else {
-          rawContent = `# Error fetching ${blobItem.path}\n\nCould not fetch content from GitHub.`;
-        }
-      } else {
+      if (rawRes.ok) {
         rawContent = await rawRes.text();
+      } else {
+        throw new Error('Raw fetch failed');
       }
     } catch {
-      rawContent = `# Error loading file: ${blobItem.path}`;
+      // Fallback 1: jsDelivr CDN
+      try {
+        const cdnRes = await fetch(cdnUrl);
+        if (cdnRes.ok) {
+          rawContent = await cdnRes.text();
+        } else {
+          throw new Error('CDN fetch failed');
+        }
+      } catch {
+        // Fallback 2: GitHub API blob endpoint if SHA available
+        if (blobItem.sha) {
+          try {
+            const blobApiUrl = `https://api.github.com/repos/${owner}/${repo}/git/blobs/${blobItem.sha}`;
+            const blobApiRes = await fetch(blobApiUrl, {
+              headers: token ? { Authorization: `Bearer ${token.trim()}` } : undefined,
+            });
+            if (blobApiRes.ok) {
+              const blobData = await blobApiRes.json();
+              if (blobData.encoding === 'base64') {
+                rawContent = decodeURIComponent(
+                  escape(atob(blobData.content.replace(/\s/g, '')))
+                );
+              } else {
+                rawContent = blobData.content;
+              }
+            } else {
+              rawContent = `# Error fetching ${blobItem.path}\n\nCould not fetch content from GitHub mirrors.`;
+            }
+          } catch {
+            rawContent = `# Error loading file: ${blobItem.path}`;
+          }
+        } else {
+          rawContent = `# Error loading file: ${blobItem.path}`;
+        }
+      }
     }
 
     const contentBytes = new Blob([rawContent]).size;

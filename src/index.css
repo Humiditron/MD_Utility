@@ -1,4 +1,5 @@
 @import "tailwindcss";
+@plugin "@tailwindcss/typography";
 
 @custom-variant dark (&:where(.dark, .dark *));
 
@@ -56,6 +57,102 @@ html.dark body {
 }
 .neon-glow-yellow {
   box-shadow: 0 0 15px -3px rgba(250, 204, 21, 0.35), 0 0 6px -2px rgba(250, 204, 21, 0.2);
+}
+
+/* Explicit Markdown Typography & Header Rendering */
+.prose h1 {
+  font-size: 1.625rem;
+  font-weight: 700;
+  line-height: 1.25;
+  margin-top: 1.5rem;
+  margin-bottom: 0.75rem;
+  padding-bottom: 0.35rem;
+  border-bottom: 1px solid #e2e8f0;
+  color: #0f172a;
+}
+.dark .prose h1 {
+  border-bottom-color: #334155;
+  color: #f8fafc;
+}
+
+.prose h2 {
+  font-size: 1.28rem;
+  font-weight: 700;
+  line-height: 1.3;
+  margin-top: 1.25rem;
+  margin-bottom: 0.6rem;
+  padding-bottom: 0.25rem;
+  border-bottom: 1px solid #f1f5f9;
+  color: #1e293b;
+}
+.dark .prose h2 {
+  border-bottom-color: #1e293b;
+  color: #f1f5f9;
+}
+
+.prose h3 {
+  font-size: 1.1rem;
+  font-weight: 600;
+  line-height: 1.35;
+  margin-top: 1rem;
+  margin-bottom: 0.45rem;
+  color: #334155;
+}
+.dark .prose h3 {
+  color: #e2e8f0;
+}
+
+.prose h4 {
+  font-size: 0.95rem;
+  font-weight: 600;
+  margin-top: 0.85rem;
+  margin-bottom: 0.35rem;
+  color: #475569;
+}
+.dark .prose h4 {
+  color: #cbd5e1;
+}
+
+.prose h5, .prose h6 {
+  font-size: 0.875rem;
+  font-weight: 600;
+  margin-top: 0.75rem;
+  margin-bottom: 0.25rem;
+  color: #64748b;
+}
+.dark .prose h5, .dark .prose h6 {
+  color: #94a3b8;
+}
+
+.prose p {
+  margin-top: 0.5rem;
+  margin-bottom: 0.5rem;
+}
+
+.prose ul, .prose ol {
+  padding-left: 1.25rem;
+  margin-top: 0.5rem;
+  margin-bottom: 0.5rem;
+}
+
+.prose li {
+  margin-top: 0.25rem;
+  margin-bottom: 0.25rem;
+}
+
+.prose code:not(pre code) {
+  font-size: 0.85em;
+  font-weight: 600;
+  padding: 0.15em 0.35em;
+  border-radius: 0.3em;
+  background-color: #f1f5f9;
+  color: #0f172a;
+  border: 1px solid #e2e8f0;
+}
+.dark .prose code:not(pre code) {
+  background-color: #0f172a;
+  color: #f1f5f9;
+  border-color: #1e293b;
 }
 
 @media print {

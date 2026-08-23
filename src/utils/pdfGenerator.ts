@@ -14,10 +14,36 @@ export interface PdfGenerationOptions {
 }
 
 /**
- * Strips markdown formatting, inline HTML tags, and attribute IDs for clean plain-text PDF layout
+ * Strips markdown formatting, converts unicode typographical symbols, and cleans HTML tags for clean plain-text PDF layout
  */
 function cleanInlineMarkdown(text: string): string {
+  if (!text) return '';
   return text
+    // Normalize unicode canonical forms
+    .normalize('NFKD')
+    // Smart quotes & apostrophes (replaces characters that cause corruptions like 'þ or â€™)
+    .replace(/[\u2018\u2019\u201A\u201B\u2032\u2035`]/g, "'")
+    .replace(/[\u201C\u201D\u201E\u201F\u2033\u2036]/g, '"')
+    .replace(/[\u00AB\u00BB]/g, '"')
+    // Dashes & Hyphens
+    .replace(/[\u2010\u2011\u2012\u2013\u2014\u2015\u2212]/g, '-')
+    // Ellipsis
+    .replace(/\u2026/g, '...')
+    // Bullets & Dots
+    .replace(/[\u2022\u2023\u2043\u2219\u25E6\u25AA\u25AB\u25CF]/g, '•')
+    // Spaces & invisible chars
+    .replace(/[\u00A0\u1680\u2000-\u200A\u202F\u205F\u3000]/g, ' ')
+    .replace(/[\u200B-\u200D\uFEFF]/g, '')
+    // Arrows
+    .replace(/[\u2192\u21D2\u2794\u279C]/g, '->')
+    .replace(/[\u2190\u21D0]/g, '<-')
+    .replace(/[\u2194\u21D4]/g, '<->')
+    // Checkmarks & Symbols
+    .replace(/[\u2713\u2714]/g, '[x]')
+    .replace(/[\u2717\u2718]/g, '[ ]')
+    .replace(/\u00A9/g, '(c)')
+    .replace(/\u00AE/g, '(r)')
+    .replace(/\u2122/g, '(tm)')
     // Strip inline HTML tags e.g. <font color="...">text</font>, <u style="...">text</u>, <span ...>
     .replace(/<[^>]+>/g, '')
     // Strip Python-Markdown / MkDocs anchor header attribute blocks e.g. "{ #code-blocks }" or "{: #custom-id }"
@@ -37,6 +63,8 @@ function cleanInlineMarkdown(text: string): string {
     .replace(/&gt;/g, '>')
     .replace(/&#39;/g, "'")
     .replace(/&nbsp;/g, ' ')
+    // Strip non-printable or corrupting control characters
+    .replace(/[^\x20-\x7E\t\n\r\xA0-\xFF]/g, '')
     .trim();
 }
 
@@ -387,6 +415,38 @@ export async function generateA4PdfFromDocuments(
         pdf.text(tabTitleTrunc, marginMm + 16, currentY + 4.7);
 
         currentY += 10;
+        continue;
+      }
+
+      // Code Snippet Inclusions: {* ../../docs_src/... hl[19] *} or { ../../docs_src/... }
+      if (
+        (trimmed.startsWith('{*') || (trimmed.startsWith('{') && (trimmed.includes('docs_src') || trimmed.includes('.py') || trimmed.includes('.ts') || trimmed.includes('.js')))) &&
+        trimmed.endsWith('}')
+      ) {
+        const cleanSnippet = trimmed.replace(/^\{\*?\s*/, '').replace(/\s*\*?\}$/, '').trim();
+        const parts = cleanSnippet.split(/\s+/);
+        const refPath = parts[0] || cleanSnippet;
+        const filename = refPath.split('/').pop() || refPath;
+        const hl = parts.slice(1).join(' ');
+
+        ensureSpace(14, file.newName);
+        pdf.setFillColor(241, 245, 249);
+        pdf.setDrawColor(203, 213, 225);
+        pdf.roundedRect(marginMm, currentY, contentWidth, 10, 1.5, 1.5, 'FD');
+
+        pdf.setFont('courier', 'bold');
+        pdf.setFontSize(8);
+        pdf.setTextColor(51, 65, 85);
+        pdf.text(`[Snippet File: ${filename}]`, marginMm + 4, currentY + 4.5);
+
+        pdf.setFont('courier', 'normal');
+        pdf.setFontSize(7);
+        pdf.setTextColor(100, 116, 139);
+        const refText = `Source: ${refPath}${hl ? ` (${hl})` : ''}`;
+        const refTrunc = refText.length > 70 ? refText.slice(0, 67) + '...' : refText;
+        pdf.text(refTrunc, marginMm + 4, currentY + 8);
+
+        currentY += 13;
         continue;
       }
 

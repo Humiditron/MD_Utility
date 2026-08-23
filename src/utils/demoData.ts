@@ -55,6 +55,22 @@ app = FastAPI()
 \`\`\`
 ////
 
+## Dependencies Example
+
+The same example would look like:
+
+{* ../../docs_src/dependencies/tutorial004_an_py310.py hl[19] *}
+
+...and **FastAPI** will know what to do.
+
+/// tip
+Prefer to use the \`Annotated\` version if possible.
+///
+
+/// warning
+This is a more advanced use case. Feel free to skip it.
+///
+
 ## Initial Setup { #initial-setup }
 Ensure Python 3.10+ is installed on your local workstation.
 

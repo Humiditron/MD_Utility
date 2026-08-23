@@ -1,6 +1,9 @@
 # GitHub Docs Flattener & MD Converter
 
-A high-performance web utility designed to prepare deeply nested GitHub documentation for LLMs, PDF converters, and offline reading. It resolves GitHub directory URLs or local ZIP archives, flattens the file structure, and sanitizes MDX/JSX into clean Markdown.
+A high-performance web utility designed to prepare deeply nested GitHub documentation for LLMs, PDF converters, and offline reading. It resolves GitHub directory URLs or local ZIP archives, flattens the file structure, and sanitizes MDX/JSX into clean Markdown. 
+
+### Co-authored with: 
+- *Gemini 3 Flash-Preview* 
 
 ![License](https://img.shields.io/github/license/humiditron/md_utility)
 ![Docker](https://img.shields.io/badge/docker-ready-blue)
@@ -44,7 +47,4 @@ npm run dev
 
 ## ⚖️ License
 MIT - Created for the developer community.
-
-### Co-authored with: 
-- *Gemini 3 Flash-Preview*
 

@@ -566,31 +566,33 @@ export const PdfExportModal: React.FC<PdfExportModalProps> = ({ files, onClose }
               {displayedFiles.map((file, index) => (
                 <article
                   key={file.id}
-                  className={`a4-sheet ${getMarginClass()} bg-white border border-slate-200/80 rounded-sm shadow-sm space-y-6 print:border-none print:shadow-none print:rounded-none ${
+                  className={`a4-sheet ${getMarginClass()} bg-white border border-slate-200/80 rounded-sm shadow-sm flex flex-col justify-between print:border-none print:shadow-none print:rounded-none ${
                     forcePageBreak ? 'print:break-before-page' : ''
                   }`}
                   style={{ minHeight: '297mm', pageBreakBefore: forcePageBreak ? 'always' : 'auto' }}
                 >
-                  {/* Header metadata band */}
-                  <div className="border-b border-slate-200 pb-3 space-y-1">
-                    <div className="flex items-center justify-between text-[11px] font-mono text-cyan-700">
-                      <span className="font-bold">DOCUMENT {index + 1} OF {selectedFiles.length}</span>
-                      <span className="text-slate-400 truncate max-w-[300px]">{file.relativePath}</span>
+                  <div className="space-y-6 flex-1">
+                    {/* Header metadata band */}
+                    <div className="border-b border-slate-200 pb-3 space-y-1">
+                      <div className="flex items-center justify-between text-[11px] font-mono text-cyan-700">
+                        <span className="font-bold">DOCUMENT {index + 1} OF {selectedFiles.length}</span>
+                        <span className="text-slate-400 truncate max-w-[300px]">{file.relativePath}</span>
+                      </div>
+                      <h2 className="text-xl font-bold text-slate-900 font-mono tracking-tight">
+                        {file.newName}
+                      </h2>
                     </div>
-                    <h2 className="text-xl font-bold text-slate-900 font-mono tracking-tight">
-                      {file.newName}
-                    </h2>
+
+                    {/* Formatted Markdown Content */}
+                    <div className="prose prose-slate max-w-none text-xs sm:text-sm leading-relaxed text-slate-700 break-words [&_pre]:bg-slate-100 [&_pre]:border [&_pre]:border-slate-200/90 [&_pre]:p-3.5 [&_pre]:rounded-lg [&_pre]:overflow-x-auto [&_code]:text-slate-800 [&_code]:font-mono [&_blockquote]:border-l-4 [&_blockquote]:border-cyan-500 [&_blockquote]:bg-slate-50 [&_blockquote]:py-2 [&_blockquote]:px-3.5 [&_blockquote]:rounded-r">
+                      <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                        {file.content}
+                      </ReactMarkdown>
+                    </div>
                   </div>
 
-                  {/* Formatted Markdown Content */}
-                  <div className="prose prose-slate max-w-none text-xs sm:text-sm leading-relaxed text-slate-700 break-words">
-                    <ReactMarkdown remarkPlugins={[remarkGfm]}>
-                      {file.content}
-                    </ReactMarkdown>
-                  </div>
-
-                  {/* A4 Sheet Running Footer */}
-                  <div className="pt-8 mt-auto border-t border-slate-100 flex items-center justify-between text-[10px] text-slate-400 font-mono">
+                  {/* A4 Sheet Running Footer (Pinned to page bottom) */}
+                  <div className="pt-6 mt-auto border-t border-slate-100 flex items-center justify-between text-[10px] text-slate-400 font-mono">
                     <span>A4 Documentation Archive</span>
                     <span>Document #{index + 1}</span>
                   </div>

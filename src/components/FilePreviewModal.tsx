@@ -196,7 +196,7 @@ export const FilePreviewModal: React.FC<FilePreviewModalProps> = ({
         {/* Modal Body */}
         <div className="p-4 sm:p-6 overflow-y-auto overflow-x-hidden flex-1 bg-white dark:bg-slate-900 min-w-0 max-w-full">
           {viewMode === 'rendered' ? (
-            <div className="prose prose-slate dark:prose-invert max-w-none text-slate-800 dark:text-slate-200 text-sm leading-relaxed space-y-4 break-words [overflow-wrap:anywhere] [word-break:break-word] [&_pre]:max-w-full [&_pre]:overflow-x-auto [&_code]:break-all [&_table]:overflow-x-auto [&_table]:block [&_table]:max-w-full">
+            <div className="prose prose-slate dark:prose-invert max-w-none text-slate-800 dark:text-slate-200 text-sm leading-relaxed space-y-4 break-words [overflow-wrap:anywhere] [word-break:break-word] [&_pre]:bg-slate-100 dark:[&_pre]:bg-slate-950 [&_pre]:border [&_pre]:border-slate-200 dark:[&_pre]:border-slate-800 [&_pre]:p-4 [&_pre]:rounded-xl [&_pre]:max-w-full [&_pre]:overflow-x-auto [&_code]:text-slate-800 dark:[&_code]:text-slate-200 [&_code]:font-mono [&_blockquote]:border-l-4 [&_blockquote]:border-cyan-500 [&_blockquote]:bg-slate-50 dark:[&_blockquote]:bg-slate-950 [&_blockquote]:py-2 [&_blockquote]:px-3.5 [&_blockquote]:rounded-r [&_table]:overflow-x-auto [&_table]:block [&_table]:max-w-full">
               <ReactMarkdown remarkPlugins={[remarkGfm]}>
                 {file.content}
               </ReactMarkdown>

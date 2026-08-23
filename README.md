@@ -18,7 +18,7 @@ A high-performance web utility designed to prepare deeply nested GitHub document
 ## 🛠 Usage
 
 ### 1. Web Version (Instant)
-Access the live tool at: **[humiditron.github.io/md_utility](https://humiditron.github.io/md_utility)**
+Access the live tool at: **[humiditron.github.io/md_utility](https://humiditron.github.io/MD_Utility)**
 
 ### 2. Docker (Local/Self-Hosted)
 Pull and run the pre-compiled image:
@@ -45,6 +45,6 @@ npm run dev
 ## ⚖️ License
 MIT - Created for the developer community.
 
-## Co-authored with: 
+### Co-authored with: 
 - *Gemini 3 Flash-Preview*
 

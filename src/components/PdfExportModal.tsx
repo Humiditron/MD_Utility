@@ -16,7 +16,7 @@ import {
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { DocFile } from '../types';
-import { generateA4PdfFromElements, printHtmlSafely, buildStandaloneA4Html } from '../utils/pdfGenerator';
+import { generateA4PdfFromDocuments, generateA4PdfFromElements, printHtmlSafely, buildStandaloneA4Html } from '../utils/pdfGenerator';
 
 interface PdfExportModalProps {
   files: DocFile[];
@@ -87,25 +87,19 @@ export const PdfExportModal: React.FC<PdfExportModalProps> = ({ files, onClose }
   const handleDirectPdfDownload = async () => {
     setIsGeneratingPdf(true);
     setStatusNotification(null);
-    setPdfProgress({ percent: 5, message: 'Preparing A4 document sheets for rasterization...' });
+    setPdfProgress({ percent: 5, message: 'Initializing high-speed A4 PDF generator...' });
 
     try {
-      // Ensure all elements are rendered into DOM before capturing
-      if (renderedCount < selectedFiles.length) {
-        setRenderedCount(selectedFiles.length);
-        await new Promise(resolve => setTimeout(resolve, 200));
+      if (selectedFiles.length === 0) {
+        throw new Error('No selected files found to export as PDF');
       }
 
-      const container = printAreaRef.current;
-      if (!container) throw new Error('Print canvas reference not found');
-
-      const sheetElements = Array.from(container.querySelectorAll<HTMLElement>('.a4-sheet'));
-      if (sheetElements.length === 0) {
-        throw new Error('No printable sheets were found to export');
-      }
-
-      const pdfBlob = await generateA4PdfFromElements(sheetElements, {
+      // High-speed native vector PDF compilation
+      const pdfBlob = await generateA4PdfFromDocuments(selectedFiles, {
         marginMm: getMarginMm(),
+        includeCover,
+        includeToc,
+        pageBreakPerDoc: forcePageBreak,
         fileName: 'documentation-bundle-a4.pdf',
         onProgress: (percent, message) => {
           setPdfProgress({ percent, message });
@@ -124,7 +118,7 @@ export const PdfExportModal: React.FC<PdfExportModalProps> = ({ files, onClose }
 
       setStatusNotification({
         type: 'success',
-        message: `Successfully generated and downloaded ${selectedFiles.length} pages as ISO A4 PDF!`,
+        message: `Successfully compiled and downloaded ${selectedFiles.length} files as an ISO A4 PDF!`,
       });
     } catch (err: any) {
       console.error('PDF Generation Error:', err);

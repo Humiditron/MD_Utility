@@ -123,6 +123,29 @@ html.dark body {
   color: #94a3b8;
 }
 
+/* Styled Tab Badges in Markdown */
+.prose h5:has(strong),
+.prose h5 {
+  background: #f1f5f9;
+  padding: 0.35rem 0.6rem;
+  border-radius: 0.375rem;
+  border: 1px solid #e2e8f0;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  color: #1e293b;
+}
+.prose h5::before {
+  content: "TAB";
+  background: #06b6d4;
+  color: white;
+  font-size: 0.65rem;
+  font-weight: 700;
+  padding: 0.1rem 0.35rem;
+  border-radius: 0.25rem;
+  letter-spacing: 0.05em;
+}
+
 .prose p {
   margin-top: 0.5rem;
   margin-bottom: 0.5rem;
@@ -149,9 +172,107 @@ html.dark body {
   border: 1px solid #e2e8f0;
 }
 .dark .prose code:not(pre code) {
-  background-color: #0f172a;
-  color: #f1f5f9;
-  border-color: #1e293b;
+  background-color: #1e293b;
+  color: #38bdf8;
+  border-color: #334155;
+}
+
+/* Styled Blockquotes & Admonitions */
+.prose blockquote {
+  border-left: 4px solid #06b6d4;
+  background: #f8fafc;
+  padding: 0.6rem 0.9rem;
+  border-radius: 0 0.375rem 0.375rem 0;
+  margin: 0.75rem 0;
+  color: #334155;
+}
+.dark .prose blockquote {
+  background: #0f172a;
+  color: #cbd5e1;
+}
+
+/* Dedicated Light Paper Protection for A4 Sheets, PDF Previews & Print Containers */
+.a4-sheet,
+.a4-sheet .prose,
+.bg-white .prose,
+#pdf-export-modal-dialog .a4-sheet .prose {
+  color: #334155 !important;
+}
+
+.a4-sheet .prose h1,
+.bg-white .prose h1,
+#pdf-export-modal-dialog .a4-sheet .prose h1 {
+  color: #0f172a !important;
+  border-bottom-color: #e2e8f0 !important;
+}
+
+.a4-sheet .prose h2,
+.bg-white .prose h2,
+#pdf-export-modal-dialog .a4-sheet .prose h2 {
+  color: #1e293b !important;
+  border-bottom-color: #f1f5f9 !important;
+}
+
+.a4-sheet .prose h3,
+.bg-white .prose h3,
+#pdf-export-modal-dialog .a4-sheet .prose h3 {
+  color: #334155 !important;
+}
+
+.a4-sheet .prose h4,
+.bg-white .prose h4,
+#pdf-export-modal-dialog .a4-sheet .prose h4 {
+  color: #475569 !important;
+}
+
+.a4-sheet .prose h5,
+.bg-white .prose h5,
+#pdf-export-modal-dialog .a4-sheet .prose h5 {
+  color: #1e293b !important;
+  background-color: #f1f5f9 !important;
+  border-color: #e2e8f0 !important;
+}
+
+.a4-sheet .prose p,
+.a4-sheet .prose li,
+.a4-sheet .prose span,
+.bg-white .prose p,
+.bg-white .prose li,
+#pdf-export-modal-dialog .a4-sheet .prose p,
+#pdf-export-modal-dialog .a4-sheet .prose li {
+  color: #334155 !important;
+}
+
+.a4-sheet .prose code:not(pre code),
+.bg-white .prose code:not(pre code),
+#pdf-export-modal-dialog .a4-sheet .prose code:not(pre code) {
+  background-color: #f1f5f9 !important;
+  color: #0f172a !important;
+  border: 1px solid #e2e8f0 !important;
+}
+
+.a4-sheet .prose pre,
+.bg-white .prose pre,
+#pdf-export-modal-dialog .a4-sheet .prose pre {
+  background-color: #f8fafc !important;
+  border: 1px solid #e2e8f0 !important;
+  color: #1e293b !important;
+}
+
+.a4-sheet .prose pre code,
+.bg-white .prose pre code,
+#pdf-export-modal-dialog .a4-sheet .prose pre code {
+  color: #1e293b !important;
+  background-color: transparent !important;
+  border: none !important;
+}
+
+.a4-sheet .prose blockquote,
+.bg-white .prose blockquote,
+#pdf-export-modal-dialog .a4-sheet .prose blockquote {
+  background-color: #f8fafc !important;
+  color: #334155 !important;
+  border-left-color: #06b6d4 !important;
 }
 
 @media print {

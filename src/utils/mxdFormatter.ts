@@ -246,28 +246,82 @@ export function formatMxdToMarkdown(
       return `\n\n##### Tab: ${cleanTitle}\n\n${cleanBody}\n\n`;
     });
 
-    // Clean any remaining standalone closing "///" or "////"
-    body = body.replace(/^[ \t]*\/{3,4}[ \t]*\r?\n?/gm, '\n');
+    // D3. MkDocs / FastAPI Slashed Admonitions: "/// info | Title" or "/// note" or "/// warning" ... "///"
+    const mkdocsAdmonitionRegex = /^[ \t]*\/{3,4}\s*(note|info|tip|warning|danger|caution|important|check|example|quote|details|abstract|success|failure|bug)(?:\s*\|\s*([^\r\n]*))?[ \t]*\r?\n([\s\S]*?)(?:^[ \t]*\/{3,4}[ \t]*$|(?=^[ \t]*\/{3,4}\s*(?:note|info|tip|warning|danger|caution|important|check|example|quote|details|abstract|success|failure|bug|tab)))/gim;
+    body = body.replace(mkdocsAdmonitionRegex, (_match, tag, title, admonitionBody) => {
+      stats.jsxElementsConverted++;
+      const tagUpper = tag.toUpperCase();
+      const titleStr = title && title.trim() ? ` ${title.trim()}` : '';
+      const cleanBody = admonitionBody.trim();
+      const quoted = cleanBody.split('\n').map((line: string) => `> ${line}`).join('\n');
+      return `\n\n> **[${tagUpper}]${titleStr}**\n${quoted}\n\n`;
+    });
 
-    // D3. Classic MkDocs Tabbed Syntax: === "Tab Title"
+    // D4. Classic MkDocs Tabbed Syntax: === "Tab Title"
     const classicTabRegex = /^[ \t]*===\s*["']([^"']+)["'](?:\s*:[\w-]+:)?\r?\n/gm;
     body = body.replace(classicTabRegex, (_match, title) => {
       stats.jsxElementsConverted++;
       return `\n\n##### Tab: ${title.trim()}\n\n`;
     });
 
-    // D4. MkDocs / FastAPI Slashed Admonitions: "/// info | Title" or "/// note" ... "///"
-    const mkdocsAdmonitionRegex = /^[ \t]*\/{3,4}\s*(note|info|tip|warning|danger|caution|important|check|example|quote|details|abstract|success|failure|bug)(?:\s*\|\s*([^\r\n]*))?[ \t]*\r?\n([\s\S]*?)(?:^[ \t]*\/{3,4}[ \t]*$|(?=^[ \t]*\/{3,4}\s*(?:note|info|tip|warning|danger|caution|important|check|example|quote|details|abstract|success|failure|bug|tab)))/gim;
-    body = body.replace(mkdocsAdmonitionRegex, (_match, tag, title, admonitionBody) => {
+    // D5. Standalone Note/Warning with pipe or on own line: e.g. "note | Technical Details" or "warning"
+    const standalonePipeAdmonitionRegex = /^[ \t]*(note|info|tip|warning|danger|caution|important)\s*\|\s*([^\r\n]+)\r?\n+((?:(?![ \t]*(?:#|>|```|===|---|\/{3,4})).+\r?\n?)+)/gim;
+    body = body.replace(standalonePipeAdmonitionRegex, (_match, tag, title, content) => {
       stats.jsxElementsConverted++;
       const tagUpper = tag.toUpperCase();
       const titleStr = title ? ` ${title.trim()}` : '';
-      const cleanBody = admonitionBody.trim();
-      const quoted = cleanBody.split('\n').map((line: string) => `> ${line}`).join('\n');
+      const quoted = content.trim().split('\n').map((line: string) => `> ${line}`).join('\n');
       return `\n\n> **[${tagUpper}]${titleStr}**\n${quoted}\n\n`;
     });
 
-    // D5. Docusaurus / Markdown-it Triple Colon Admonitions: :::info[Title] ... :::
+    const standaloneAdmonitionRegex = /^[ \t]*(tip|warning|info|note|caution|danger|important)\s*$(?:\r?\n)+((?:(?![ \t]*(?:#|>|```|===|---|\/{3,4})).+\r?\n?)+)/gim;
+    body = body.replace(standaloneAdmonitionRegex, (_match, tag, content) => {
+      stats.jsxElementsConverted++;
+      const tagUpper = tag.toUpperCase();
+      const quoted = content.trim().split('\n').map((line: string) => `> ${line}`).join('\n');
+      return `\n\n> **[${tagUpper}]**\n${quoted}\n\n`;
+    });
+
+    // Clean any remaining standalone closing "///" or "////"
+    body = body.replace(/^[ \t]*\/{3,4}[ \t]*\r?\n?/gm, '\n');
+
+    // D6. Code Snippets & External File Inclusions: e.g. {* ../../docs_src/... hl[19] *} or { ../../docs_src/... }
+    const snippetIncludeRegex = /^[ \t]*\{\*?\s*(\.{1,2}\/[^\s}]+|\S+\.(?:py|js|ts|tsx|jsx|json|yaml|yml|sh|bash|sql|html|css|rs|go|c|cpp|h|java|kt|rb|php|md|txt))(?:\s+(?:hl|ln)\[([^\]]*)\]|\s+([^}*]*))?\s*\*?\}[ \t]*$/gm;
+    body = body.replace(snippetIncludeRegex, (_match, filePath, highlights, extra) => {
+      stats.jsxElementsConverted++;
+      const cleanPath = filePath.trim();
+      const filename = cleanPath.split('/').pop() || cleanPath;
+      const ext = filename.split('.').pop()?.toLowerCase() || '';
+      const langMap: Record<string, string> = {
+        py: 'python',
+        js: 'javascript',
+        ts: 'typescript',
+        tsx: 'tsx',
+        jsx: 'jsx',
+        json: 'json',
+        yml: 'yaml',
+        yaml: 'yaml',
+        sh: 'bash',
+        bash: 'bash',
+        sql: 'sql',
+        html: 'html',
+        css: 'css',
+        rs: 'rust',
+        go: 'go',
+        java: 'java',
+        kt: 'kotlin',
+        rb: 'ruby',
+        php: 'php',
+        md: 'markdown',
+      };
+      const lang = langMap[ext] || ext || 'text';
+      const highlightInfo = highlights ? ` (Highlighted lines: ${highlights})` : '';
+      const extraInfo = extra && extra.trim() ? ` [${extra.trim()}]` : '';
+
+      return `\n\`\`\`${lang}\n# [Code Snippet File: ${filename}]\n# Reference: ${cleanPath}${highlightInfo}${extraInfo}\n\`\`\`\n`;
+    });
+
+    // D7. Docusaurus / Markdown-it Triple Colon Admonitions: :::info[Title] ... :::
     const colonAdmonitionRegex = /^[ \t]*:::\s*(note|info|tip|warning|danger|caution|important|details)(?:\[(.*?)\]|[\s:]([^\r\n]*))?\r?\n([\s\S]*?)^[ \t]*:::[ \t]*$/gim;
     body = body.replace(colonAdmonitionRegex, (_match, tag, bracketTitle, spaceTitle, calloutBody) => {
       stats.jsxElementsConverted++;
@@ -278,7 +332,7 @@ export function formatMxdToMarkdown(
       return `\n\n> **[${tagUpper}]${titleStr}**\n${quoted}\n\n`;
     });
 
-    // D6. Classic MkDocs Admonitions: !!! note "Title" or ???+ info "Title"
+    // D8. Classic MkDocs Admonitions: !!! note "Title" or ???+ info "Title"
     const classicAdmonitionRegex = /^[ \t]*(?:!|\?){3}\+?\s*(note|info|tip|warning|danger|caution|important|question|faq|quote|example)\s*(?:"([^"]*)"|'([^']*)')?[ \t]*\r?\n/gim;
     body = body.replace(classicAdmonitionRegex, (_match, tag, title1, title2) => {
       stats.jsxElementsConverted++;
@@ -287,11 +341,17 @@ export function formatMxdToMarkdown(
       return `\n\n> **[${tag.toUpperCase()}]${titleStr}**\n>\n`;
     });
 
-    // D7. Strip Python-Markdown / MkDocs header attribute anchor IDs: e.g. "## code blocks { #code-blocks }" or "{: #custom-id }"
+    // D9. Strip Python-Markdown / MkDocs header attribute anchor IDs: e.g. "## code blocks { #code-blocks }" or "{: #custom-id }"
     body = body.replace(/\s*\{:?\s*#[a-zA-Z0-9_-]+(?:\s+[.#a-zA-Z0-9_-]+)*\s*\}\s*$/gm, '');
     body = body.replace(/\s*\{\s*#[a-zA-Z0-9_-]+\s*\}\s*/g, '');
 
-    // D8. Clean / Normalize Inline HTML tags (<font>, <u>, <span>, <kbd>, <center>)
+    // D10. Raw image filename references without markdown image syntax: e.g. "!image01.png" -> "![image01.png](...)"
+    const rawExclamationImageRegex = /^[ \t]*!([a-zA-Z0-9_\-\.]+\.(?:png|jpe?g|gif|svg|webp|avif))[ \t]*$/gm;
+    body = body.replace(rawExclamationImageRegex, (_match, imgFile) => {
+      return `\n![${imgFile}](./images/${imgFile})\n`;
+    });
+
+    // D11. Clean / Normalize Inline HTML tags (<font>, <u>, <span>, <kbd>, <center>)
     body = body.replace(/<font(?:\s+[^>]*)?>([\s\S]*?)<\/font>/gi, '$1');
     body = body.replace(/<u(?:\s+[^>]*)?>([\s\S]*?)<\/u>/gi, '_$1_');
     body = body.replace(/<span(?:\s+[^>]*)?>([\s\S]*?)<\/span>/gi, '$1');

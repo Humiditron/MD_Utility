@@ -21,8 +21,10 @@ function cleanInlineMarkdown(text: string): string {
   return text
     // Normalize unicode canonical forms
     .normalize('NFKD')
-    // Smart quotes & apostrophes (replaces characters that cause corruptions like 'þ or â€™)
-    .replace(/[\u2018\u2019\u201A\u201B\u2032\u2035`]/g, "'")
+    // Strip markdown inline code formatting first: `foo` -> foo
+    .replace(/`([^`]+)`/g, '$1')
+    // Smart quotes & apostrophes (replaces unicode smart characters that cause corruptions like 'þ or â€™)
+    .replace(/[\u2018\u2019\u201A\u201B\u2032\u2035]/g, "'")
     .replace(/[\u201C\u201D\u201E\u201F\u2033\u2036]/g, '"')
     .replace(/[\u00AB\u00BB]/g, '"')
     // Dashes & Hyphens
@@ -54,7 +56,6 @@ function cleanInlineMarkdown(text: string): string {
     .replace(/\*(.*?)\*/g, '$1')
     .replace(/__(.*?)__/g, '$1')
     .replace(/_(.*?)_/g, '$1')
-    .replace(/`([^`]+)`/g, '$1')
     .replace(/\[([^\]]+)\]\([^\)]+\)/g, '$1')
     // Common HTML entities
     .replace(/&quot;/g, '"')
@@ -511,6 +512,63 @@ export async function generateA4PdfFromDocuments(
         const wrapped = pdf.splitTextToSize(text, contentWidth);
         pdf.text(wrapped, marginMm, currentY);
         currentY += wrapped.length * 4.2 + 2;
+        continue;
+      }
+
+      // Slashed or Standalone Admonitions: "/// warning", "/// note | Technical Details", "note | Technical Details", "warning", etc.
+      const isSlashedAdmonition = /^\/{3,4}\s*(note|info|tip|warning|danger|caution|important|check|example|quote|details|abstract|success|failure|bug)/i.test(trimmed);
+      const isPipeAdmonition = /^(note|info|tip|warning|danger|caution|important)\s*\|\s*/i.test(trimmed);
+      const isStandaloneAdmonitionWord = /^(note|info|tip|warning|danger|caution|important)$/i.test(trimmed);
+
+      if (isSlashedAdmonition || isPipeAdmonition || isStandaloneAdmonitionWord) {
+        let tag = 'NOTE';
+        let title = '';
+
+        if (isSlashedAdmonition) {
+          const match = trimmed.match(/^\/{3,4}\s*([a-zA-Z0-9_-]+)(?:\s*\|\s*(.*))?$/i);
+          tag = (match?.[1] || 'NOTE').toUpperCase();
+          title = cleanInlineMarkdown(match?.[2] || '');
+        } else if (isPipeAdmonition) {
+          const match = trimmed.match(/^([a-zA-Z0-9_-]+)\s*\|\s*(.*)$/i);
+          tag = (match?.[1] || 'NOTE').toUpperCase();
+          title = cleanInlineMarkdown(match?.[2] || '');
+        } else {
+          tag = trimmed.toUpperCase();
+        }
+
+        ensureSpace(12, file.newName);
+
+        // Accent color determination
+        let barColor = [6, 182, 212]; // cyan-500
+        let badgeBg = [207, 250, 254]; // cyan-100
+        let badgeText = [8, 145, 178]; // cyan-600
+
+        if (tag === 'WARNING' || tag === 'CAUTION') {
+          barColor = [245, 158, 11]; // amber-500
+          badgeBg = [254, 243, 199]; // amber-100
+          badgeText = [180, 83, 9]; // amber-700
+        } else if (tag === 'DANGER' || tag === 'ALERT' || tag === 'CRITICAL' || tag === 'FAILURE' || tag === 'BUG') {
+          barColor = [239, 68, 68]; // red-500
+          badgeBg = [254, 226, 226]; // red-100
+          badgeText = [185, 28, 28]; // red-700
+        } else if (tag === 'TIP' || tag === 'SUCCESS' || tag === 'CHECK') {
+          barColor = [16, 185, 129]; // emerald-500
+          badgeBg = [209, 250, 229]; // emerald-100
+          badgeText = [4, 120, 87]; // emerald-700
+        }
+
+        // Draw admonition badge header
+        pdf.setFillColor(barColor[0], barColor[1], barColor[2]);
+        pdf.roundedRect(marginMm, currentY, contentWidth, 7.5, 1.2, 1.2, 'F');
+
+        pdf.setFont('helvetica', 'bold');
+        pdf.setFontSize(7.5);
+        pdf.setTextColor(255, 255, 255);
+        const headerLabel = title ? `[${tag}]  ${title}` : `[${tag}]`;
+        const headerTrunc = headerLabel.length > 60 ? headerLabel.slice(0, 57) + '...' : headerLabel;
+        pdf.text(headerTrunc, marginMm + 3.5, currentY + 5);
+
+        currentY += 10;
         continue;
       }
 

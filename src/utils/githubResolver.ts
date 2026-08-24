@@ -428,6 +428,11 @@ export async function resolveGitHubDirectory(
 
   const metadata: ZipMetadata = {
     filename: `${owner}-${repo}${subPath ? `-${subPath.replace(/\//g, '-')}` : ''}.zip`,
+    repoName: repo,
+    repoOwner: owner,
+    directory: subPath || '',
+    sourceUrl: `https://github.com/${owner}/${repo}${subPath ? `/tree/${branch || 'main'}/${subPath}` : ''}`,
+    documentTitle: subPath ? `${owner}/${repo} (${subPath})` : `${owner}/${repo}`,
     totalFilesCount: rawTree.length,
     matchedFilesCount: finalizedFiles.length,
     totalSize: totalBytes,

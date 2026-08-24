@@ -229,8 +229,13 @@ export async function processZipFile(
   // Sort files logically by their new flattened name
   docFiles.sort((a, b) => a.newName.localeCompare(b.newName));
 
+  const cleanBaseName = fileName.replace(/\.zip$/i, '');
+  const dirName = commonRoot ? commonRoot.replace(/\/$/, '') : '';
   const metadata: ZipMetadata = {
     filename: fileName,
+    repoName: cleanBaseName,
+    directory: dirName,
+    documentTitle: dirName ? `${cleanBaseName} (${dirName})` : cleanBaseName,
     totalFilesCount: allEntryPaths.length,
     matchedFilesCount: matchedCount,
     totalSize: totalCalculatedSize,

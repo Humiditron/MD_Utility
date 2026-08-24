@@ -9,23 +9,32 @@ import {
   Sparkles,
   Cpu,
   Loader2,
-  FileCode,
   CheckCircle2,
   AlertCircle
 } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
-import { DocFile } from '../types';
-import { generateA4PdfFromDocuments, generateA4PdfFromElements, printHtmlSafely, buildStandaloneA4Html } from '../utils/pdfGenerator';
+import { DocFile, ZipMetadata } from '../types';
+import { generateA4PdfFromDocuments } from '../utils/pdfGenerator';
 
 interface PdfExportModalProps {
   files: DocFile[];
+  metadata?: ZipMetadata;
   onClose: () => void;
 }
 
-export const PdfExportModal: React.FC<PdfExportModalProps> = ({ files, onClose }) => {
+export const PdfExportModal: React.FC<PdfExportModalProps> = ({ files, metadata, onClose }) => {
   const selectedFiles = files.filter(f => f.selected);
   const printAreaRef = useRef<HTMLDivElement>(null);
+
+  const repoOwner = metadata?.repoOwner;
+  const repoName = metadata?.repoName;
+  const repoSource = repoOwner && repoName ? `${repoOwner}/${repoName}` : (repoName || '');
+  const repoDir = metadata?.directory || '';
+  const cleanDocTitle = metadata?.documentTitle || (repoSource ? `${repoSource}${repoDir ? ` (${repoDir})` : ''}` : 'Documentation Bundle');
+  const safeFilenamePrefix = (repoName || metadata?.filename?.replace(/\.zip$/i, '') || 'docs')
+    .toLowerCase()
+    .replace(/[^a-z0-9-_]/g, '-');
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -100,7 +109,11 @@ export const PdfExportModal: React.FC<PdfExportModalProps> = ({ files, onClose }
         includeCover,
         includeToc,
         pageBreakPerDoc: forcePageBreak,
-        fileName: 'documentation-bundle-a4.pdf',
+        metadata,
+        docTitle: cleanDocTitle,
+        repoName: repoSource,
+        directory: repoDir,
+        fileName: `${safeFilenamePrefix}-a4-bundle.pdf`,
         onProgress: (percent, message) => {
           setPdfProgress({ percent, message });
         },
@@ -110,7 +123,7 @@ export const PdfExportModal: React.FC<PdfExportModalProps> = ({ files, onClose }
       const url = URL.createObjectURL(pdfBlob);
       const link = document.createElement('a');
       link.href = url;
-      link.download = `docs-bundle-a4-${new Date().toISOString().slice(0, 10)}.pdf`;
+      link.download = `${safeFilenamePrefix}-docs-a4-${new Date().toISOString().slice(0, 10)}.pdf`;
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
@@ -133,7 +146,7 @@ export const PdfExportModal: React.FC<PdfExportModalProps> = ({ files, onClose }
   };
 
   /**
-   * Triggers browser print dialog using an isolated print iframe to bypass parent sandbox restrictions
+   * Triggers native browser print dialog
    */
   const handlePrint = async () => {
     setStatusNotification(null);
@@ -143,66 +156,7 @@ export const PdfExportModal: React.FC<PdfExportModalProps> = ({ files, onClose }
       await new Promise(resolve => setTimeout(resolve, 150));
       setIsRenderingAll(false);
     }
-
-    try {
-      const container = printAreaRef.current;
-      if (container) {
-        const printHtml = `
-          <!DOCTYPE html>
-          <html>
-          <head>
-            <title>Documentation Bundle - A4</title>
-            <style>
-              @page { size: A4 portrait; margin: ${getMarginMm()}mm; }
-              body { font-family: system-ui, -apple-system, sans-serif; margin: 0; padding: 0; }
-              .a4-sheet { page-break-before: always; break-before: page; margin-bottom: 20px; }
-              .a4-sheet:first-child { page-break-before: auto; break-before: auto; }
-              pre { background: #f8fafc; padding: 10px; border-radius: 4px; overflow-x: auto; }
-              code { font-family: monospace; background: #f1f5f9; padding: 2px 4px; }
-              blockquote { border-left: 3px solid #06b6d4; margin: 0; padding-left: 10px; color: #475569; }
-            </style>
-          </head>
-          <body>
-            ${container.innerHTML}
-          </body>
-          </html>
-        `;
-        await printHtmlSafely(printHtml);
-      } else {
-        window.print();
-      }
-    } catch {
-      window.print();
-    }
-  };
-
-  /**
-   * Downloads a standalone, offline-ready printable A4 HTML file
-   */
-  const handleDownloadStandaloneHtml = () => {
-    const renderedArticles = selectedFiles.map((file, idx) => {
-      return `
-        <div style="font-family: monospace; font-size: 9pt; color: #0891b2; margin-bottom: 4px;">
-          DOCUMENT ${idx + 1} OF ${selectedFiles.length} &bull; ${file.relativePath}
-        </div>
-        <h2 style="font-family: monospace; font-size: 14pt; margin: 0 0 12px 0;">${file.newName}</h2>
-        <div class="content">${file.content}</div>
-      `;
-    });
-
-    const html = buildStandaloneA4Html(selectedFiles, renderedArticles, {
-      marginMm: getMarginMm(),
-      includeCover,
-      includeToc,
-    });
-
-    const blob = new Blob([html], { type: 'text/html;charset=utf-8' });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = `printable-docs-a4-${new Date().toISOString().slice(0, 10)}.html`;
-    link.click();
-    URL.revokeObjectURL(url);
+    window.print();
   };
 
   /**
@@ -259,12 +213,22 @@ export const PdfExportModal: React.FC<PdfExportModalProps> = ({ files, onClose }
                 <h3 className="text-sm font-bold text-slate-800 dark:text-white truncate">
                   A4 Print & Direct PDF Generator
                 </h3>
+                {repoSource && (
+                  <span className="text-[11px] font-mono font-bold text-pink-600 dark:text-pink-400 bg-pink-50 dark:bg-pink-500/10 border border-pink-200 dark:border-pink-500/30 px-2 py-0.5 rounded-md truncate max-w-[200px]" title={`Repository: ${repoSource}`}>
+                    {repoSource}
+                  </span>
+                )}
+                {repoDir && (
+                  <span className="text-[10px] font-mono text-cyan-700 dark:text-cyan-300 bg-cyan-50 dark:bg-cyan-500/10 border border-cyan-200 dark:border-cyan-500/30 px-1.5 py-0.5 rounded truncate max-w-[140px]" title={`Directory: ${repoDir}`}>
+                    📁 {repoDir}
+                  </span>
+                )}
                 <span className="text-[10px] font-bold text-amber-700 dark:text-yellow-300 bg-amber-50 dark:bg-yellow-500/10 border border-amber-200 dark:border-yellow-500/30 px-2 py-0.5 rounded-full uppercase tracking-wider shrink-0">
                   ISO A4 (210 × 297 mm)
                 </span>
               </div>
               <p className="text-xs text-slate-500 dark:text-slate-400 truncate">
-                {selectedFiles.length} documentation files prepared for direct PDF download and printing
+                {selectedFiles.length} documentation files from {repoSource || 'archive'} prepared for direct PDF download and printing
               </p>
             </div>
           </div>
@@ -282,19 +246,7 @@ export const PdfExportModal: React.FC<PdfExportModalProps> = ({ files, onClose }
               <span className="hidden sm:inline">Merged .MD</span>
             </button>
 
-            {/* Download Standalone A4 HTML */}
-            <button
-              id="download-standalone-html-btn"
-              type="button"
-              onClick={handleDownloadStandaloneHtml}
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-750 text-slate-700 dark:text-slate-200 text-xs font-medium rounded-xl shadow-2xs transition-colors cursor-pointer whitespace-nowrap"
-              title="Download standalone offline A4 HTML file"
-            >
-              <FileCode className="w-3.5 h-3.5 text-slate-400" />
-              <span className="hidden sm:inline">Printable HTML</span>
-            </button>
-
-            {/* Browser Print with Safe Sandbox Bypass */}
+            {/* Browser Print */}
             <button
               id="print-pdf-btn"
               type="button"
@@ -500,17 +452,27 @@ export const PdfExportModal: React.FC<PdfExportModalProps> = ({ files, onClose }
                   <div className="space-y-6 pt-12">
                     <div className="flex items-center gap-2 text-xs font-mono font-bold text-cyan-700 uppercase tracking-widest">
                       <Layers className="w-4 h-4" />
-                      Compiled A4 Repository Docs
+                      {repoSource ? `Repository: ${repoSource}` : 'Compiled A4 Repository Docs'}
                     </div>
                     <h1 className="text-3xl sm:text-4xl font-extrabold text-slate-900 tracking-tight leading-tight">
-                      Documentation Bundle
+                      {repoName ? `${repoName} Documentation` : 'Documentation Bundle'}
                     </h1>
                     <p className="text-sm text-slate-600 max-w-lg leading-relaxed">
-                      Generated from {selectedFiles.length} Markdown and converted MDX documentation source files, flattened with full relative path mapping.
+                      Generated from {selectedFiles.length} Markdown and converted MDX documentation source files{repoDir ? ` located in directory "${repoDir}"` : ''}, flattened with full relative path mapping.
                     </p>
                   </div>
 
                   <div className="pt-12 border-t border-slate-200 space-y-2 text-xs text-slate-500 font-mono">
+                    <div className="flex justify-between">
+                      <span>Source Repository:</span>
+                      <strong className="text-slate-700">{repoSource || metadata?.filename || 'Source Archive'}</strong>
+                    </div>
+                    {repoDir && (
+                      <div className="flex justify-between">
+                        <span>Directory Path:</span>
+                        <strong className="text-slate-700">{repoDir}</strong>
+                      </div>
+                    )}
                     <div className="flex justify-between">
                       <span>Standard Paper Format:</span>
                       <strong className="text-slate-700">ISO A4 (210mm × 297mm)</strong>
@@ -584,7 +546,7 @@ export const PdfExportModal: React.FC<PdfExportModalProps> = ({ files, onClose }
                     </div>
 
                     {/* Formatted Markdown Content */}
-                    <div className="prose prose-slate max-w-none text-xs sm:text-sm leading-relaxed text-slate-700 break-words [&_pre]:bg-slate-100 [&_pre]:border [&_pre]:border-slate-200/90 [&_pre]:p-3.5 [&_pre]:rounded-lg [&_pre]:overflow-x-auto [&_code]:text-slate-800 [&_code]:font-mono [&_blockquote]:border-l-4 [&_blockquote]:border-cyan-500 [&_blockquote]:bg-slate-50 [&_blockquote]:py-2 [&_blockquote]:px-3.5 [&_blockquote]:rounded-r">
+                    <div className="prose prose-slate max-w-none text-xs sm:text-sm leading-relaxed text-slate-700 break-words [&_pre]:bg-slate-100 [&_pre]:border [&_pre]:border-slate-200/90 [&_pre]:p-3.5 [&_pre]:rounded-lg [&_pre]:overflow-x-auto [&_code]:text-slate-800 [&_code]:font-mono [&_blockquote]:border-l-4 [&_blockquote]:border-cyan-500 [&_blockquote]:bg-slate-50 [&_blockquote]:py-2 [&_blockquote]:px-3.5 [&_blockquote]:rounded-r [&_table]:border-collapse [&_table]:w-full [&_th]:text-slate-900 [&_th]:bg-slate-100 [&_th]:border [&_th]:border-slate-300 [&_th]:p-2 [&_th]:font-bold [&_td]:text-slate-800 [&_td]:border [&_td]:border-slate-200 [&_td]:p-2 [&_td]:bg-white">
                       <ReactMarkdown remarkPlugins={[remarkGfm]}>
                         {file.content}
                       </ReactMarkdown>
@@ -618,7 +580,7 @@ export const PdfExportModal: React.FC<PdfExportModalProps> = ({ files, onClose }
                     </h2>
                   </div>
 
-                  <div className="prose prose-slate max-w-none text-xs sm:text-sm leading-relaxed text-slate-700">
+                  <div className="prose prose-slate max-w-none text-xs sm:text-sm leading-relaxed text-slate-700 [&_th]:text-slate-900 [&_th]:bg-slate-100 [&_th]:border [&_th]:border-slate-300 [&_th]:p-2 [&_th]:font-bold [&_td]:text-slate-800 [&_td]:border [&_td]:border-slate-200 [&_td]:p-2">
                     <ReactMarkdown remarkPlugins={[remarkGfm]}>
                       {file.content}
                     </ReactMarkdown>

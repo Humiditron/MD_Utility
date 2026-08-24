@@ -43,6 +43,11 @@ export interface TransformSettings {
 
 export interface ZipMetadata {
   filename: string;
+  repoName?: string;
+  repoOwner?: string;
+  directory?: string;
+  sourceUrl?: string;
+  documentTitle?: string;
   totalFilesCount: number;
   matchedFilesCount: number;
   totalSize: number;

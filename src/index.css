@@ -124,49 +124,178 @@ html.dark body {
 }
 
 /* Styled Tab Badges in Markdown */
-.prose h5:has(strong),
 .prose h5 {
   background: #f1f5f9;
-  padding: 0.35rem 0.6rem;
-  border-radius: 0.375rem;
+  padding: 0.35rem 0.65rem;
+  border-radius: 0.5rem;
   border: 1px solid #e2e8f0;
   display: inline-flex;
   align-items: center;
-  gap: 0.4rem;
-  color: #1e293b;
+  gap: 0.45rem;
+  color: #0f172a;
+  font-size: 0.825rem;
+  font-weight: 600;
+  margin-top: 0.85rem;
+  margin-bottom: 0.4rem;
 }
 .prose h5::before {
   content: "TAB";
   background: #06b6d4;
-  color: white;
+  color: #ffffff;
   font-size: 0.65rem;
   font-weight: 700;
   padding: 0.1rem 0.35rem;
   border-radius: 0.25rem;
   letter-spacing: 0.05em;
 }
+.dark .prose h5 {
+  background: #1e293b;
+  border-color: #334155;
+  color: #f1f5f9;
+}
+.dark .prose h5::before {
+  background: #0891b2;
+  color: #ffffff;
+}
 
 .prose p {
+  margin-top: 0.6rem;
+  margin-bottom: 0.6rem;
+  line-height: 1.65;
+}
+
+.dark .prose {
+  color: #e2e8f0;
+}
+.dark .prose p,
+.dark .prose span,
+.dark .prose td,
+.dark .prose th {
+  color: #cbd5e1;
+}
+.dark .prose strong,
+.dark .prose b {
+  color: #ffffff;
+}
+.dark .prose em,
+.dark .prose i {
+  color: #e2e8f0;
+}
+.dark .prose a {
+  color: #38bdf8;
+  text-decoration: underline;
+}
+.dark .prose a:hover {
+  color: #7dd3fc;
+}
+
+/* Base Markdown Table Styles */
+.prose table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 1.25rem 0;
+  font-size: 0.85rem;
+  line-height: 1.5;
+  border-radius: 0.5rem;
+  overflow: hidden;
+  border: 1px solid #e2e8f0;
+}
+.prose thead {
+  background-color: #f1f5f9;
+  border-bottom: 2px solid #cbd5e1;
+}
+.prose th {
+  padding: 0.6rem 0.85rem;
+  font-weight: 700;
+  text-align: left;
+  color: #0f172a;
+  border: 1px solid #e2e8f0;
+}
+.prose td {
+  padding: 0.55rem 0.85rem;
+  color: #334155;
+  border: 1px solid #e2e8f0;
+  background-color: #ffffff;
+}
+.prose tr:nth-child(even) td {
+  background-color: #f8fafc;
+}
+
+.dark .prose table {
+  border-color: #334155;
+}
+.dark .prose thead {
+  background-color: #1e293b;
+  border-bottom-color: #475569;
+}
+.dark .prose th {
+  color: #f8fafc;
+  border-color: #334155;
+}
+.dark .prose td {
+  color: #e2e8f0;
+  border-color: #334155;
+  background-color: #0f172a;
+}
+.dark .prose tr:nth-child(even) td {
+  background-color: #1e293b;
+}
+
+/* Bullet and Numbered List Item Dots */
+.prose ul {
+  list-style-type: disc !important;
+  list-style-position: outside !important;
+  padding-left: 1.25rem !important;
   margin-top: 0.5rem;
   margin-bottom: 0.5rem;
 }
-
-.prose ul, .prose ol {
-  padding-left: 1.25rem;
+.prose ol {
+  list-style-type: decimal !important;
+  list-style-position: outside !important;
+  padding-left: 1.25rem !important;
   margin-top: 0.5rem;
   margin-bottom: 0.5rem;
 }
-
+.prose ul ul {
+  list-style-type: circle !important;
+  padding-left: 1.1rem !important;
+}
+.prose ul ul ul {
+  list-style-type: square !important;
+  padding-left: 1.1rem !important;
+}
+.prose ul > li,
+.prose ol > li,
 .prose li {
+  padding-left: 0.15rem !important;
   margin-top: 0.25rem;
   margin-bottom: 0.25rem;
+  line-height: 1.6;
+  color: inherit;
+}
+.prose ul > li::before,
+.prose ol > li::before {
+  display: none !important;
+}
+.prose li > p {
+  display: inline !important;
+  margin: 0 !important;
+}
+.prose li::marker {
+  color: #ec4899;
+  font-weight: bold;
+}
+.dark .prose li::marker {
+  color: #f472b6;
 }
 
+/* Inline Code Badges */
 .prose code:not(pre code) {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
   font-size: 0.85em;
   font-weight: 600;
-  padding: 0.15em 0.35em;
-  border-radius: 0.3em;
+  padding: 0.15em 0.4em;
+  border-radius: 0.35em;
   background-color: #f1f5f9;
   color: #0f172a;
   border: 1px solid #e2e8f0;
@@ -177,102 +306,192 @@ html.dark body {
   border-color: #334155;
 }
 
+/* Pre & Code Fences */
+.prose pre {
+  background-color: #0f172a;
+  border: 1px solid #1e293b;
+  color: #e2e8f0;
+  border-radius: 0.75rem;
+  padding: 1rem;
+  margin: 0.85rem 0;
+  overflow-x: auto;
+}
+.dark .prose pre {
+  background-color: #020617;
+  border-color: #1e293b;
+  color: #f1f5f9;
+}
+.prose pre code {
+  background-color: transparent !important;
+  border: none !important;
+  color: inherit !important;
+  font-size: 0.85rem;
+  padding: 0 !important;
+}
+
 /* Styled Blockquotes & Admonitions */
 .prose blockquote {
   border-left: 4px solid #06b6d4;
   background: #f8fafc;
   padding: 0.6rem 0.9rem;
-  border-radius: 0 0.375rem 0.375rem 0;
+  border-radius: 0 0.5rem 0.5rem 0;
   margin: 0.75rem 0;
   color: #334155;
 }
 .dark .prose blockquote {
-  background: #0f172a;
+  background: #0b1329;
   color: #cbd5e1;
+  border-left-color: #06b6d4;
 }
 
-/* Dedicated Light Paper Protection for A4 Sheets, PDF Previews & Print Containers */
+/* Dedicated Light Paper Protection ONLY for A4 PDF Print / Export Sheets */
 .a4-sheet,
 .a4-sheet .prose,
-.bg-white .prose,
+#pdf-export-modal-dialog .prose,
 #pdf-export-modal-dialog .a4-sheet .prose {
   color: #334155 !important;
 }
 
 .a4-sheet .prose h1,
-.bg-white .prose h1,
-#pdf-export-modal-dialog .a4-sheet .prose h1 {
+#pdf-export-modal-dialog .prose h1 {
   color: #0f172a !important;
   border-bottom-color: #e2e8f0 !important;
 }
 
 .a4-sheet .prose h2,
-.bg-white .prose h2,
-#pdf-export-modal-dialog .a4-sheet .prose h2 {
+#pdf-export-modal-dialog .prose h2 {
   color: #1e293b !important;
   border-bottom-color: #f1f5f9 !important;
 }
 
 .a4-sheet .prose h3,
-.bg-white .prose h3,
-#pdf-export-modal-dialog .a4-sheet .prose h3 {
+#pdf-export-modal-dialog .prose h3 {
   color: #334155 !important;
 }
 
 .a4-sheet .prose h4,
-.bg-white .prose h4,
-#pdf-export-modal-dialog .a4-sheet .prose h4 {
+#pdf-export-modal-dialog .prose h4 {
   color: #475569 !important;
 }
 
 .a4-sheet .prose h5,
-.bg-white .prose h5,
-#pdf-export-modal-dialog .a4-sheet .prose h5 {
-  color: #1e293b !important;
+#pdf-export-modal-dialog .prose h5 {
+  color: #0f172a !important;
   background-color: #f1f5f9 !important;
   border-color: #e2e8f0 !important;
+}
+.a4-sheet .prose h5::before,
+#pdf-export-modal-dialog .prose h5::before {
+  background: #06b6d4 !important;
+  color: #ffffff !important;
 }
 
 .a4-sheet .prose p,
 .a4-sheet .prose li,
 .a4-sheet .prose span,
-.bg-white .prose p,
-.bg-white .prose li,
-#pdf-export-modal-dialog .a4-sheet .prose p,
-#pdf-export-modal-dialog .a4-sheet .prose li {
+#pdf-export-modal-dialog .prose p,
+#pdf-export-modal-dialog .prose li,
+#pdf-export-modal-dialog .prose span {
   color: #334155 !important;
 }
 
+.a4-sheet .prose strong,
+.a4-sheet .prose b,
+#pdf-export-modal-dialog .prose strong,
+#pdf-export-modal-dialog .prose b {
+  color: #0f172a !important;
+  font-weight: 700 !important;
+}
+
+.a4-sheet .prose em,
+.a4-sheet .prose i,
+#pdf-export-modal-dialog .prose em,
+#pdf-export-modal-dialog .prose i {
+  color: #334155 !important;
+}
+
+.a4-sheet .prose a,
+#pdf-export-modal-dialog .prose a {
+  color: #0284c7 !important;
+  text-decoration: underline !important;
+}
+.a4-sheet .prose a:hover,
+#pdf-export-modal-dialog .prose a:hover {
+  color: #0369a1 !important;
+}
+
 .a4-sheet .prose code:not(pre code),
-.bg-white .prose code:not(pre code),
-#pdf-export-modal-dialog .a4-sheet .prose code:not(pre code) {
+#pdf-export-modal-dialog .prose code:not(pre code) {
   background-color: #f1f5f9 !important;
   color: #0f172a !important;
   border: 1px solid #e2e8f0 !important;
+  padding: 0.15rem 0.35rem !important;
+  border-radius: 0.25rem !important;
 }
 
 .a4-sheet .prose pre,
-.bg-white .prose pre,
-#pdf-export-modal-dialog .a4-sheet .prose pre {
+#pdf-export-modal-dialog .prose pre {
   background-color: #f8fafc !important;
   border: 1px solid #e2e8f0 !important;
   color: #1e293b !important;
 }
 
 .a4-sheet .prose pre code,
-.bg-white .prose pre code,
-#pdf-export-modal-dialog .a4-sheet .prose pre code {
+#pdf-export-modal-dialog .prose pre code {
   color: #1e293b !important;
   background-color: transparent !important;
   border: none !important;
 }
 
 .a4-sheet .prose blockquote,
-.bg-white .prose blockquote,
-#pdf-export-modal-dialog .a4-sheet .prose blockquote {
+#pdf-export-modal-dialog .prose blockquote {
   background-color: #f8fafc !important;
   color: #334155 !important;
   border-left-color: #06b6d4 !important;
+}
+
+.a4-sheet .prose table,
+#pdf-export-modal-dialog .prose table {
+  width: 100% !important;
+  border-collapse: collapse !important;
+  margin: 1rem 0 !important;
+  font-size: 0.8rem !important;
+  border: 1px solid #cbd5e1 !important;
+  background-color: #ffffff !important;
+}
+
+.a4-sheet .prose thead,
+#pdf-export-modal-dialog .prose thead {
+  background-color: #f1f5f9 !important;
+  border-bottom: 2px solid #cbd5e1 !important;
+}
+
+.a4-sheet .prose th,
+#pdf-export-modal-dialog .prose th {
+  background-color: #f1f5f9 !important;
+  color: #0f172a !important;
+  font-weight: 700 !important;
+  border: 1px solid #cbd5e1 !important;
+  padding: 0.45rem 0.65rem !important;
+  text-align: left !important;
+}
+
+.a4-sheet .prose td,
+#pdf-export-modal-dialog .prose td {
+  color: #1e293b !important;
+  border: 1px solid #e2e8f0 !important;
+  padding: 0.45rem 0.65rem !important;
+  background-color: #ffffff !important;
+}
+
+.a4-sheet .prose tr:nth-child(even) td,
+#pdf-export-modal-dialog .prose tr:nth-child(even) td {
+  background-color: #f8fafc !important;
+}
+
+.a4-sheet .prose hr,
+#pdf-export-modal-dialog .prose hr {
+  border-color: #e2e8f0 !important;
 }
 
 @media print {

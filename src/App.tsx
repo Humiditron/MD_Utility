@@ -628,6 +628,7 @@ export default function App() {
       {showPdfExport && zipData && (
         <PdfExportModal
           files={zipData.files}
+          metadata={zipData.metadata}
           onClose={() => setShowPdfExport(false)}
         />
       )}

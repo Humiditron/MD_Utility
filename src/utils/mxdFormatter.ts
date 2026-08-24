@@ -229,9 +229,9 @@ export function formatMxdToMarkdown(
       let tabBlocks = '';
       let match;
       while ((match = itemRegex.exec(innerTabs)) !== null) {
-        const label = match[1];
+        const label = match[1].trim().replace(/^tab:\s*/i, '');
         const tabContent = match[2].trim();
-        tabBlocks += `\n\n##### Tab: ${label}\n\n${tabContent}\n`;
+        tabBlocks += `\n\n##### ${label}\n\n${tabContent}\n`;
       }
       return tabBlocks || innerTabs;
     });
@@ -240,10 +240,10 @@ export function formatMxdToMarkdown(
     const mkdocsTabRegex = /^[ \t]*\/{3,4}\s*tab\s*\|\s*(.*?)[ \t]*\r?\n([\s\S]*?)(?:^[ \t]*\/{3,4}[ \t]*$|(?=^[ \t]*\/{3,4}\s*tab\s*\|))/gm;
     body = body.replace(mkdocsTabRegex, (_match, tabTitle, tabBody) => {
       stats.jsxElementsConverted++;
-      const cleanTitle = tabTitle.trim().replace(/^['"]|['"]$/g, '');
+      const cleanTitle = tabTitle.trim().replace(/^['"]|['"]$/g, '').replace(/^tab:\s*/i, '');
       // Strip any option annotations like "    :new: 0.100.0" or "    :upgrade:"
       const cleanBody = tabBody.replace(/^[ \t]*:[a-zA-Z0-9_-]+:[^\r\n]*\r?\n?/gm, '').trim();
-      return `\n\n##### Tab: ${cleanTitle}\n\n${cleanBody}\n\n`;
+      return `\n\n##### ${cleanTitle}\n\n${cleanBody}\n\n`;
     });
 
     // D3. MkDocs / FastAPI Slashed Admonitions: "/// info | Title" or "/// note" or "/// warning" ... "///"
@@ -261,7 +261,8 @@ export function formatMxdToMarkdown(
     const classicTabRegex = /^[ \t]*===\s*["']([^"']+)["'](?:\s*:[\w-]+:)?\r?\n/gm;
     body = body.replace(classicTabRegex, (_match, title) => {
       stats.jsxElementsConverted++;
-      return `\n\n##### Tab: ${title.trim()}\n\n`;
+      const cleanTitle = title.trim().replace(/^tab:\s*/i, '');
+      return `\n\n##### ${cleanTitle}\n\n`;
     });
 
     // D5. Standalone Note/Warning with pipe or on own line: e.g. "note | Technical Details" or "warning"
@@ -284,6 +285,21 @@ export function formatMxdToMarkdown(
 
     // Clean any remaining standalone closing "///" or "////"
     body = body.replace(/^[ \t]*\/{3,4}[ \t]*\r?\n?/gm, '\n');
+
+    // D5b. FastAPI / Typer Terminal Blocks: <div class="termy">...</div> or <pre class="termy">...</pre> or <termy>...</termy>
+    const termyBlockRegex = /<(?:div|pre|section)\s+(?:class|className)=["'](?:termy|terminal|cli-output)["'][^>]*>([\s\S]*?)<\/(?:div|pre|section)>|<termy(?:\s+[^>]*)?>([\s\S]*?)<\/termy>/gi;
+    body = body.replace(termyBlockRegex, (_match, inner1, inner2) => {
+      stats.jsxElementsConverted++;
+      const inner = (inner1 || inner2 || '').trim();
+      if (/^```/m.test(inner)) {
+        return `\n\n${inner}\n\n`;
+      }
+      return `\n\n\`\`\`console\n${inner}\n\`\`\`\n\n`;
+    });
+
+    // Strip any remaining standalone <div class="termy">, <termy>, </div>, </termy>
+    body = body.replace(/<\/?(?:div|pre|section)\s+(?:class|className)=["'](?:termy|terminal|cli-output)["'][^>]*>/gi, '');
+    body = body.replace(/<\/?termy(?:\s+[^>]*)?>/gi, '');
 
     // D6. Code Snippets & External File Inclusions: e.g. {* ../../docs_src/... hl[19] *} or { ../../docs_src/... }
     const snippetIncludeRegex = /^[ \t]*\{\*?\s*(\.{1,2}\/[^\s}]+|\S+\.(?:py|js|ts|tsx|jsx|json|yaml|yml|sh|bash|sql|html|css|rs|go|c|cpp|h|java|kt|rb|php|md|txt))(?:\s+(?:hl|ln)\[([^\]]*)\]|\s+([^}*]*))?\s*\*?\}[ \t]*$/gm;
@@ -480,6 +496,9 @@ export function formatMxdToMarkdown(
     // Ensure blank lines before and after fenced code blocks
     body = body.replace(/([^\n])\n(```[\w-]*\r?\n)/g, '$1\n\n$2');
     body = body.replace(/(\n```)\n([^\n`])/g, '$1\n\n$2');
+
+    // Normalize list item bullets: collapse multiple spaces/tabs after bullet/number marker to single space
+    body = body.replace(/^([ \t]*)([*+-]|\d+\.)[ \t]{2,}/gm, '$1$2 ');
 
     // Clean up excessive blank lines (more than 2 consecutive blank lines collapsed to 2)
     body = body.replace(/\n{3,}/g, '\n\n');

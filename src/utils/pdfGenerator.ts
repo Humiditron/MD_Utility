@@ -1,12 +1,16 @@
 import { jsPDF } from 'jspdf';
 import html2canvas from 'html2canvas';
 import { toJpeg } from 'html-to-image';
-import { DocFile } from '../types';
+import { DocFile, ZipMetadata } from '../types';
 
 export interface PdfGenerationOptions {
   pageSize?: 'a4';
   marginMm?: number;
   fileName?: string;
+  docTitle?: string;
+  repoName?: string;
+  directory?: string;
+  metadata?: ZipMetadata;
   includeCover?: boolean;
   includeToc?: boolean;
   pageBreakPerDoc?: boolean;
@@ -16,13 +20,18 @@ export interface PdfGenerationOptions {
 /**
  * Strips markdown formatting, converts unicode typographical symbols, and cleans HTML tags for clean plain-text PDF layout
  */
-function cleanInlineMarkdown(text: string): string {
+function cleanInlineMarkdown(text: string, stripBackticks = true): string {
   if (!text) return '';
-  return text
+  let cleaned = text
     // Normalize unicode canonical forms
-    .normalize('NFKD')
-    // Strip markdown inline code formatting first: `foo` -> foo
-    .replace(/`([^`]+)`/g, '$1')
+    .normalize('NFKD');
+
+  if (stripBackticks) {
+    // Strip markdown inline code formatting: `foo` -> foo
+    cleaned = cleaned.replace(/`([^`]+)`/g, '$1').replace(/`/g, '');
+  }
+
+  return cleaned
     // Smart quotes & apostrophes (replaces unicode smart characters that cause corruptions like 'þ or â€™)
     .replace(/[\u2018\u2019\u201A\u201B\u2032\u2035]/g, "'")
     .replace(/[\u201C\u201D\u201E\u201F\u2033\u2036]/g, '"')
@@ -51,7 +60,7 @@ function cleanInlineMarkdown(text: string): string {
     // Strip Python-Markdown / MkDocs anchor header attribute blocks e.g. "{ #code-blocks }" or "{: #custom-id }"
     .replace(/\s*\{:?\s*#[a-zA-Z0-9_-]+[^}]*\}\s*$/g, '')
     .replace(/\s*\{\s*#[a-zA-Z0-9_-]+\s*\}\s*/g, '')
-    // Standard markdown inline styling
+    // Standard markdown inline styling (bold/italic/links)
     .replace(/\*\*(.*?)\*\*/g, '$1')
     .replace(/\*(.*?)\*/g, '$1')
     .replace(/__(.*?)__/g, '$1')
@@ -102,11 +111,19 @@ export async function generateA4PdfFromDocuments(
   const pdfHeight = 297; // mm
   const contentWidth = pdfWidth - marginMm * 2;
   const startY = marginMm + 10;
-  const maxY = pdfHeight - marginMm - 12;
+  // Safety margin: ensure content stops well before the running footer line
+  const maxY = pdfHeight - marginMm - 14;
 
   let currentPage = 1;
   let currentY = startY;
   const filePageMap: { [fileId: string]: number } = {};
+
+  // Repository & Directory record resolution
+  const repoOwner = options.metadata?.repoOwner;
+  const repoName = options.metadata?.repoName || options.repoName;
+  const repoSource = repoOwner && repoName ? `${repoOwner}/${repoName}` : (repoName || '');
+  const repoDirectory = options.metadata?.directory || options.directory || '';
+  const docBundleTitle = options.docTitle || (repoSource ? `${repoSource}${repoDirectory ? ` / ${repoDirectory}` : ''}` : 'Documentation Bundle');
 
   const addHeaderFooter = (docTitle: string, pageNum: number, totalPagesPlaceholder = false) => {
     pdf.saveGraphicsState();
@@ -114,8 +131,10 @@ export async function generateA4PdfFromDocuments(
     pdf.setFont('helvetica', 'normal');
     pdf.setFontSize(8);
     pdf.setTextColor(148, 163, 184); // slate-400
-    pdf.text('A4 Markdown Documentation Bundle', marginMm, marginMm + 3);
-    const truncTitle = docTitle.length > 40 ? docTitle.slice(0, 38) + '...' : docTitle;
+    const headerLeft = repoSource ? `${repoSource}${repoDirectory ? ` (${repoDirectory})` : ''}` : 'A4 Markdown Documentation';
+    const truncHeaderLeft = headerLeft.length > 42 ? headerLeft.slice(0, 40) + '...' : headerLeft;
+    pdf.text(truncHeaderLeft, marginMm, marginMm + 3);
+    const truncTitle = docTitle.length > 38 ? docTitle.slice(0, 36) + '...' : docTitle;
     pdf.text(truncTitle, pdfWidth - marginMm, marginMm + 3, { align: 'right' });
 
     pdf.setDrawColor(226, 232, 240); // slate-200
@@ -123,10 +142,10 @@ export async function generateA4PdfFromDocuments(
     pdf.line(marginMm, marginMm + 5, pdfWidth - marginMm, marginMm + 5);
 
     // Running Footer
-    pdf.line(marginMm, pdfHeight - marginMm - 5, pdfWidth - marginMm, pdfHeight - marginMm - 5);
-    pdf.text('Generated with Docs ZIP Flattener', marginMm, pdfHeight - marginMm - 1.5);
+    pdf.line(marginMm, pdfHeight - marginMm - 6, pdfWidth - marginMm, pdfHeight - marginMm - 6);
+    pdf.text('Generated with Docs ZIP Flattener', marginMm, pdfHeight - marginMm - 2);
     const pageStr = totalPagesPlaceholder ? `Page ${pageNum}` : `Page ${pageNum}`;
-    pdf.text(pageStr, pdfWidth - marginMm, pdfHeight - marginMm - 1.5, { align: 'right' });
+    pdf.text(pageStr, pdfWidth - marginMm, pdfHeight - marginMm - 2, { align: 'right' });
     pdf.restoreGraphicsState();
   };
 
@@ -150,46 +169,50 @@ export async function generateA4PdfFromDocuments(
     pdf.setFont('helvetica', 'bold');
     pdf.setFontSize(10);
     pdf.setTextColor(236, 72, 153);
-    pdf.text('COMPILED A4 REPOSITORY DOCS', marginMm, marginMm + 15);
+    pdf.text(repoSource ? `REPOSITORY: ${repoSource.toUpperCase()}` : 'COMPILED A4 REPOSITORY DOCS', marginMm, marginMm + 15);
 
-    pdf.setFontSize(26);
+    pdf.setFontSize(24);
     pdf.setTextColor(15, 23, 42); // slate-900
-    pdf.text('Documentation Bundle', marginMm, marginMm + 28);
+    const coverTitle = repoName ? `${repoName} Documentation` : 'Documentation Bundle';
+    pdf.text(coverTitle, marginMm, marginMm + 27);
 
     pdf.setFont('helvetica', 'normal');
-    pdf.setFontSize(11);
+    pdf.setFontSize(10.5);
     pdf.setTextColor(100, 116, 139); // slate-500
-    const subtitle = `Generated from ${files.length} Markdown & converted MDX source files, flattened with full relative path mapping.`;
+    const dirInfo = repoDirectory ? ` from directory "${repoDirectory}"` : '';
+    const subtitle = `Flattened & compiled repository documentation${dirInfo} (${files.length} Markdown & converted MDX files).`;
     const subLines = pdf.splitTextToSize(subtitle, contentWidth);
-    pdf.text(subLines, marginMm, marginMm + 38);
+    pdf.text(subLines, marginMm, marginMm + 37);
 
     // Metadata card box
-    const cardY = marginMm + 60;
+    const cardY = marginMm + 56;
     pdf.setFillColor(248, 250, 252); // slate-50
     pdf.setDrawColor(226, 232, 240); // slate-200
-    pdf.roundedRect(marginMm, cardY, contentWidth, 55, 3, 3, 'FD');
+    pdf.roundedRect(marginMm, cardY, contentWidth, 64, 3, 3, 'FD');
 
     pdf.setFont('helvetica', 'bold');
     pdf.setFontSize(10);
     pdf.setTextColor(51, 65, 85);
-    pdf.text('BUNDLE SUMMARY', marginMm + 8, cardY + 12);
+    pdf.text('REPOSITORY & BUNDLE SUMMARY', marginMm + 8, cardY + 11);
 
     pdf.setFont('helvetica', 'normal');
-    pdf.setFontSize(9.5);
+    pdf.setFontSize(9);
     pdf.setTextColor(71, 85, 105);
 
     const totalSizeKb = (files.reduce((acc, f) => acc + f.size, 0) / 1024).toFixed(1);
-    const mdxCount = files.filter(f => f.extension.toLowerCase().includes('mdx')).length;
+    const mdxCount = files.filter(f => f.extension.toLowerCase().includes('mdx') || f.isMxdConverted).length;
 
-    pdf.text(`• Total Documents: ${files.length} files`, marginMm + 8, cardY + 22);
-    pdf.text(`• MDX Converted: ${mdxCount} files`, marginMm + 8, cardY + 30);
-    pdf.text(`• Total Source Size: ${totalSizeKb} KB`, marginMm + 8, cardY + 38);
-    pdf.text(`• Format Standard: ISO A4 (210 × 297 mm) with ${marginMm}mm margins`, marginMm + 8, cardY + 46);
+    pdf.text(`• Repository / Source: ${repoSource || options.metadata?.filename || 'Uploaded ZIP Archive'}`, marginMm + 8, cardY + 20);
+    pdf.text(`• Target Directory: ${repoDirectory || '(Repository Root)'}`, marginMm + 8, cardY + 28);
+    pdf.text(`• Total Documents: ${files.length} source files`, marginMm + 8, cardY + 36);
+    pdf.text(`• MDX Converted: ${mdxCount} files`, marginMm + 8, cardY + 44);
+    pdf.text(`• Total Source Size: ${totalSizeKb} KB`, marginMm + 8, cardY + 52);
+    pdf.text(`• Standard: ISO A4 (210 × 297 mm) with ${marginMm}mm margins`, marginMm + 8, cardY + 60);
 
     // Bottom info
     pdf.setFontSize(8.5);
     pdf.setTextColor(148, 163, 184);
-    pdf.text(`Created on ${new Date().toLocaleDateString(undefined, { dateStyle: 'full' })}`, marginMm, pdfHeight - marginMm - 4);
+    pdf.text(`Generated on ${new Date().toLocaleDateString(undefined, { dateStyle: 'full' })}`, marginMm, pdfHeight - marginMm - 4);
 
     pdf.addPage('a4', 'portrait');
     currentPage++;
@@ -375,6 +398,42 @@ export async function generateA4PdfFromDocuments(
         continue;
       }
 
+      // Terminal Container Blocks: <div class="termy"> or <pre class="termy"> or <termy>
+      if (
+        trimmed.startsWith('<div class="termy">') ||
+        trimmed.startsWith('<pre class="termy">') ||
+        trimmed.startsWith('<div className="termy">') ||
+        trimmed.startsWith('<termy')
+      ) {
+        if (!inCodeBlock) {
+          inCodeBlock = true;
+          codeBlockLines = [];
+        }
+        continue;
+      }
+
+      if (trimmed === '</div>' || trimmed === '</pre>' || trimmed === '</termy>') {
+        if (inCodeBlock) {
+          inCodeBlock = false;
+          if (codeBlockLines.length > 0) {
+            const fullCodeText = codeBlockLines.join('\n');
+            pdf.setFont('courier', 'normal');
+            pdf.setFontSize(8);
+            const wrappedCode = pdf.splitTextToSize(fullCodeText, contentWidth - 8);
+            const batchHeight = wrappedCode.length * 3.8 + 6;
+            ensureSpace(Math.min(batchHeight, 40), file.newName);
+            pdf.setFillColor(241, 245, 249);
+            pdf.setDrawColor(203, 213, 225);
+            pdf.roundedRect(marginMm, currentY, contentWidth, batchHeight, 1.5, 1.5, 'FD');
+            pdf.setTextColor(30, 41, 59);
+            pdf.text(wrappedCode, marginMm + 4, currentY + 5);
+            currentY += batchHeight + 3;
+            codeBlockLines = [];
+          }
+        }
+        continue;
+      }
+
       // Empty Line
       if (!trimmed) {
         currentY += 2.5;
@@ -386,12 +445,14 @@ export async function generateA4PdfFromDocuments(
         trimmed.startsWith('//// tab |') ||
         trimmed.startsWith('/// tab |') ||
         trimmed.startsWith('##### Tab:') ||
+        trimmed.startsWith('##### ') ||
         trimmed.startsWith('=== ')
       ) {
         const tabTitle = cleanInlineMarkdown(
           trimmed
-            .replace(/^(\/{3,4}\s*tab\s*\|\s*|#{1,6}\s*Tab:\s*|===\s*["']?)/i, '')
-            .replace(/["']$/, '')
+            .replace(/^(\/{3,4}\s*tab\s*\|\s*|#{1,6}\s*(?:Tab:\s*)?|===\s*["']?)/i, '')
+            .replace(/["']$/, ''),
+          true
         );
         ensureSpace(12, file.newName);
 
@@ -412,7 +473,8 @@ export async function generateA4PdfFromDocuments(
         pdf.setFont('helvetica', 'bold');
         pdf.setFontSize(8.5);
         pdf.setTextColor(30, 41, 59); // slate-800
-        const tabTitleTrunc = tabTitle.length > 55 ? tabTitle.slice(0, 52) + '...' : tabTitle;
+        const cleanTabName = tabTitle.replace(/^tab:\s*/i, '').trim();
+        const tabTitleTrunc = cleanTabName.length > 55 ? cleanTabName.slice(0, 52) + '...' : cleanTabName;
         pdf.text(tabTitleTrunc, marginMm + 16, currentY + 4.7);
 
         currentY += 10;
@@ -604,10 +666,23 @@ export async function generateA4PdfFromDocuments(
 
       // Bullet / Numbered Lists
       if (/^[-*+]\s+/.test(trimmed) || /^\d+\.\s+/.test(trimmed)) {
-        ensureSpace(7, file.newName);
         const isNumbered = /^\d+\.\s+/.test(trimmed);
         const bulletSymbol = isNumbered ? trimmed.match(/^\d+\./)?.[0] || '1.' : '•';
         const listText = cleanInlineMarkdown(trimmed.replace(/^([-*+]|\d+\.)\s+/, ''));
+
+        pdf.setFont('helvetica', 'normal');
+        pdf.setFontSize(9.5);
+        const wrapped = pdf.splitTextToSize(listText, contentWidth - 10);
+        const itemHeight = wrapped.length * 4.4 + 1.5;
+
+        // Check space for the full list item
+        if (currentY + itemHeight > maxY) {
+          if (itemHeight < (maxY - startY)) {
+            ensureSpace(itemHeight, file.newName);
+          } else {
+            ensureSpace(8, file.newName);
+          }
+        }
 
         pdf.setFont('helvetica', 'bold');
         pdf.setFontSize(9.5);
@@ -617,22 +692,181 @@ export async function generateA4PdfFromDocuments(
         pdf.setFont('helvetica', 'normal');
         pdf.setFontSize(9.5);
         pdf.setTextColor(51, 65, 85);
-        const wrapped = pdf.splitTextToSize(listText, contentWidth - 10);
-        pdf.text(wrapped, marginMm + 8, currentY);
-        currentY += wrapped.length * 4.4 + 1.5;
+
+        // If item is multi-line and exceeds single page, print lines safely
+        if (itemHeight >= (maxY - startY)) {
+          for (let li = 0; li < wrapped.length; li++) {
+            ensureSpace(5, file.newName);
+            pdf.text(wrapped[li], marginMm + 8, currentY);
+            currentY += 4.4;
+          }
+          currentY += 1.5;
+        } else {
+          pdf.text(wrapped, marginMm + 8, currentY);
+          currentY += itemHeight;
+        }
+        continue;
+      }
+
+      // Markdown Tables: e.g. | axis | how to measure |
+      const isTableHead = trimmed.startsWith('|') && trimmed.includes('|');
+      const isNextSeparator = l + 1 < lines.length && /^\|?[\s\-:|]+\|?$/.test(lines[l + 1].trim()) && lines[l + 1].includes('-');
+
+      if (isTableHead && isNextSeparator) {
+        const tableRows: string[][] = [];
+        
+        const parseRowCells = (rowStr: string): string[] => {
+          let s = rowStr.trim();
+          if (s.startsWith('|')) s = s.slice(1);
+          if (s.endsWith('|')) s = s.slice(0, -1);
+          return s.split('|').map(c => cleanInlineMarkdown(c.trim(), true));
+        };
+
+        // Header row
+        tableRows.push(parseRowCells(trimmed));
+        l++; // skip separator row (e.g. |---|---|)
+
+        // Collect all subsequent data rows
+        while (l + 1 < lines.length) {
+          const nextTrimmed = lines[l + 1].trim();
+          if (nextTrimmed.startsWith('|') && nextTrimmed.includes('|')) {
+            l++;
+            tableRows.push(parseRowCells(nextTrimmed));
+          } else {
+            break;
+          }
+        }
+
+        if (tableRows.length > 0) {
+          const numCols = Math.max(...tableRows.map(r => r.length));
+          if (numCols > 0) {
+            // Calculate proportional column widths
+            const colMaxLens = new Array(numCols).fill(1);
+            tableRows.forEach(row => {
+              for (let c = 0; c < numCols; c++) {
+                const cellLen = (row[c] || '').length;
+                colMaxLens[c] = Math.max(colMaxLens[c], cellLen);
+              }
+            });
+
+            const totalLen = colMaxLens.reduce((a, b) => a + b, 0) || 1;
+            const minColPercent = Math.min(0.25, 0.85 / numCols);
+            let colWidths = colMaxLens.map(len => Math.max(contentWidth * minColPercent, (len / totalLen) * contentWidth));
+            const sumWidths = colWidths.reduce((a, b) => a + b, 0);
+            colWidths = colWidths.map(w => (w / sumWidths) * contentWidth);
+
+            ensureSpace(16, file.newName);
+
+            // Render each table row
+            for (let r = 0; r < tableRows.length; r++) {
+              const isHeader = r === 0;
+              const row = tableRows[r];
+
+              const fontSize = isHeader ? 8 : 7.5;
+              const fontStyle = isHeader ? 'bold' : 'normal';
+              pdf.setFont('helvetica', fontStyle);
+              pdf.setFontSize(fontSize);
+
+              const wrappedCells: string[][] = [];
+              let maxCellLines = 1;
+
+              for (let c = 0; c < numCols; c++) {
+                const cellText = row[c] || '';
+                const cellWidth = colWidths[c] - 4; // 2mm padding per side
+                const wrapped = pdf.splitTextToSize(cellText, Math.max(cellWidth, 10));
+                wrappedCells.push(wrapped);
+                maxCellLines = Math.max(maxCellLines, wrapped.length);
+              }
+
+              const rowHeight = Math.max(isHeader ? 7 : 6, maxCellLines * 3.5 + 3.5);
+              ensureSpace(rowHeight, file.newName);
+
+              let startX = marginMm;
+              for (let c = 0; c < numCols; c++) {
+                const colW = colWidths[c];
+
+                if (isHeader) {
+                  pdf.setFillColor(241, 245, 249); // slate-100
+                  pdf.setDrawColor(203, 213, 225); // slate-300
+                } else if (r % 2 === 1) {
+                  pdf.setFillColor(255, 255, 255); // white
+                  pdf.setDrawColor(226, 232, 240); // slate-200
+                } else {
+                  pdf.setFillColor(248, 250, 252); // slate-50
+                  pdf.setDrawColor(226, 232, 240); // slate-200
+                }
+
+                pdf.rect(startX, currentY, colW, rowHeight, 'FD');
+
+                pdf.setFont('helvetica', fontStyle);
+                pdf.setFontSize(fontSize);
+                if (isHeader) {
+                  pdf.setTextColor(15, 23, 42); // slate-900
+                } else {
+                  pdf.setTextColor(30, 41, 59); // slate-800
+                }
+
+                const wrapped = wrappedCells[c];
+                pdf.text(wrapped, startX + 2.5, currentY + 3.6);
+
+                startX += colW;
+              }
+
+              currentY += rowHeight;
+            }
+
+            currentY += 3.5;
+            continue;
+          }
+        }
+      }
+
+      // Standalone Command Line or Enclosed Code snippet: e.g. "$ pip install ...", "`fastapi dev main.py`"
+      const isCommandLine = /^(\$\s+|pip\s+|npm\s+|pnpm\s+|yarn\s+|uv\s+|python\s+|docker\s+|git\s+|curl\s+)/i.test(trimmed);
+      const isEnclosedCode = /^`[^`]+`$/.test(trimmed);
+      if (isCommandLine || isEnclosedCode) {
+        const codeText = cleanInlineMarkdown(trimmed.replace(/^`|`$/g, ''), true);
+        pdf.setFont('courier', 'normal');
+        pdf.setFontSize(8.5);
+        const wrappedCode = pdf.splitTextToSize(codeText, contentWidth - 8);
+        const boxHeight = wrappedCode.length * 3.8 + 4;
+        ensureSpace(boxHeight + 2, file.newName);
+        pdf.setFillColor(241, 245, 249);
+        pdf.setDrawColor(203, 213, 225);
+        pdf.roundedRect(marginMm, currentY, contentWidth, boxHeight, 1.2, 1.2, 'FD');
+        pdf.setTextColor(30, 41, 59);
+        pdf.text(wrappedCode, marginMm + 4, currentY + 3.8);
+        currentY += boxHeight + 2.5;
         continue;
       }
 
       // Standard Paragraph
       const cleanPara = cleanInlineMarkdown(trimmed);
       if (cleanPara) {
-        ensureSpace(7, file.newName);
         pdf.setFont('helvetica', 'normal');
         pdf.setFontSize(9.5);
         pdf.setTextColor(30, 41, 59);
         const wrapped = pdf.splitTextToSize(cleanPara, contentWidth);
-        pdf.text(wrapped, marginMm, currentY);
-        currentY += wrapped.length * 4.4 + 2;
+        const paraHeight = wrapped.length * 4.4 + 2;
+
+        if (currentY + paraHeight > maxY) {
+          if (paraHeight < (maxY - startY)) {
+            ensureSpace(paraHeight, file.newName);
+            pdf.text(wrapped, marginMm, currentY);
+            currentY += paraHeight;
+          } else {
+            // Multi-page paragraph
+            for (let pi = 0; pi < wrapped.length; pi++) {
+              ensureSpace(5, file.newName);
+              pdf.text(wrapped[pi], marginMm, currentY);
+              currentY += 4.4;
+            }
+            currentY += 2;
+          }
+        } else {
+          pdf.text(wrapped, marginMm, currentY);
+          currentY += paraHeight;
+        }
       }
     }
 
@@ -810,195 +1044,3 @@ export function printHtmlSafely(htmlContent: string): Promise<boolean> {
   });
 }
 
-/**
- * Generates standalone, offline-ready printable A4 HTML file
- */
-export function buildStandaloneA4Html(
-  files: DocFile[],
-  renderedHtmlList: string[],
-  options: { marginMm: number; includeToc: boolean; includeCover: boolean }
-): string {
-  const { marginMm, includeToc, includeCover } = options;
-
-  return `<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <title>Documentation Bundle - ISO A4</title>
-  <style>
-    @page {
-      size: A4 portrait;
-      margin: ${marginMm}mm;
-    }
-    * {
-      box-sizing: border-box;
-    }
-    body {
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-      font-size: 11pt;
-      line-height: 1.6;
-      color: #0f172a;
-      background: #ffffff;
-      margin: 0;
-      padding: 0;
-    }
-    .a4-page {
-      width: 210mm;
-      min-height: 297mm;
-      padding: ${marginMm}mm;
-      margin: 0 auto 20px auto;
-      background: #ffffff;
-      page-break-before: always;
-      break-before: page;
-      border: 1px solid #e2e8f0;
-    }
-    .a4-page:first-child {
-      page-break-before: auto;
-      break-before: auto;
-    }
-    @media print {
-      body {
-        width: 100%;
-        margin: 0;
-        padding: 0;
-      }
-      .a4-page {
-        width: 100%;
-        min-height: auto;
-        padding: 0;
-        margin: 0;
-        border: none;
-      }
-    }
-    h1, h2, h3, h4, h5, h6 {
-      color: #0f172a;
-      font-weight: 700;
-      margin-top: 1.5em;
-      margin-bottom: 0.5em;
-      line-height: 1.3;
-    }
-    h1 { font-size: 20pt; }
-    h2 { font-size: 16pt; }
-    h3 { font-size: 13pt; }
-    code {
-      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
-      font-size: 9.5pt;
-      background: #f1f5f9;
-      color: #0f172a;
-      padding: 2px 5px;
-      border-radius: 4px;
-    }
-    pre {
-      background: #0f172a;
-      color: #f8fafc;
-      padding: 12px 16px;
-      border-radius: 6px;
-      overflow-x: auto;
-      font-size: 9pt;
-      line-height: 1.45;
-    }
-    pre code {
-      background: transparent;
-      padding: 0;
-      color: #f8fafc;
-    }
-    blockquote {
-      border-left: 4px solid #6366f1;
-      padding-left: 14px;
-      margin-left: 0;
-      color: #475569;
-      font-style: italic;
-    }
-    img {
-      max-width: 100%;
-      height: auto;
-      border-radius: 4px;
-    }
-    table {
-      width: 100%;
-      border-collapse: collapse;
-      margin: 16px 0;
-      font-size: 10pt;
-    }
-    th, td {
-      border: 1px solid #cbd5e1;
-      padding: 8px 12px;
-      text-align: left;
-    }
-    th {
-      background: #f8fafc;
-      font-weight: 600;
-    }
-    .header-tag {
-      font-size: 9pt;
-      color: #4f46e5;
-      font-family: monospace;
-      margin-bottom: 4px;
-    }
-    .footer-tag {
-      margin-top: 30px;
-      padding-top: 10px;
-      border-top: 1px solid #e2e8f0;
-      font-size: 8.5pt;
-      color: #94a3b8;
-      display: flex;
-      justify-content: space-between;
-    }
-  </style>
-</head>
-<body>
-  ${includeCover ? `
-    <div class="a4-page" style="display: flex; flex-direction: column; justify-content: space-between;">
-      <div style="margin-top: 40px;">
-        <div style="font-size: 11pt; color: #4f46e5; font-weight: bold; font-family: monospace; letter-spacing: 2px;">
-          DOCUMENTATION ARCHIVE
-        </div>
-        <h1 style="font-size: 28pt; margin-top: 15px; margin-bottom: 10px; color: #0f172a;">
-          Compiled Documentation Bundle
-        </h1>
-        <p style="color: #64748b; font-size: 12pt;">
-          Flattened and reformatted from ${files.length} source documents.
-        </p>
-      </div>
-      <div style="border-top: 1px solid #e2e8f0; padding-top: 15px; font-size: 9pt; color: #64748b; font-family: monospace;">
-        <div>Paper Format: ISO A4 (210mm × 297mm)</div>
-        <div>Total Documents: ${files.length} files</div>
-        <div>Generated: ${new Date().toLocaleDateString()}</div>
-      </div>
-    </div>
-  ` : ''}
-
-  ${includeToc ? `
-    <div class="a4-page">
-      <h2 style="border-bottom: 1px solid #e2e8f0; padding-bottom: 8px; margin-bottom: 15px; color: #0f172a;">
-        Table of Contents (${files.length} items)
-      </h2>
-      <ul style="list-style: none; padding-left: 0;">
-        ${files.map((f, i) => `
-          <li style="padding: 6px 0; border-bottom: 1px dashed #f1f5f9; display: flex; justify-content: space-between; font-size: 10pt;">
-            <span><strong>#${i + 1}</strong> &nbsp; ${f.newName}</span>
-            <span style="color: #94a3b8; font-family: monospace;">${f.relativePath}</span>
-          </li>
-        `).join('')}
-      </ul>
-    </div>
-  ` : ''}
-
-  ${files.map((file, idx) => `
-    <article class="a4-page">
-      <div style="border-bottom: 1px solid #e2e8f0; padding-bottom: 8px; margin-bottom: 15px;">
-        <div class="header-tag">DOCUMENT ${idx + 1} OF ${files.length} &bull; ${file.relativePath}</div>
-        <h2 style="margin: 0; font-family: monospace; font-size: 14pt; color: #0f172a;">${file.newName}</h2>
-      </div>
-      <div class="content">
-        ${renderedHtmlList[idx] || ''}
-      </div>
-      <div class="footer-tag">
-        <span>A4 Documentation Bundle</span>
-        <span>Document #${idx + 1}</span>
-      </div>
-    </article>
-  `).join('')}
-</body>
-</html>`;
-}

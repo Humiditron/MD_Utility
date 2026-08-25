@@ -149,12 +149,70 @@ export async function generateA4PdfFromDocuments(
     pdf.restoreGraphicsState();
   };
 
+  const forceNewPage = (docTitle: string) => {
+    addHeaderFooter(docTitle, currentPage);
+    pdf.addPage('a4', 'portrait');
+    currentPage++;
+    currentY = startY;
+  };
+
   const ensureSpace = (requiredHeight: number, docTitle: string) => {
     if (currentY + requiredHeight > maxY) {
-      addHeaderFooter(docTitle, currentPage);
-      pdf.addPage('a4', 'portrait');
-      currentPage++;
-      currentY = startY;
+      forceNewPage(docTitle);
+    }
+  };
+
+  /**
+   * Safely renders multi-line or multi-page code blocks with guaranteed forward progress
+   */
+  const renderCodeSnippet = (rawCodeLines: string[], docTitle: string) => {
+    if (rawCodeLines.length === 0) return;
+    const fullCodeText = rawCodeLines.join('\n');
+    pdf.setFont('courier', 'normal');
+    pdf.setFontSize(8);
+
+    const wrappedCode = pdf.splitTextToSize(fullCodeText, contentWidth - 8);
+    if (!wrappedCode || wrappedCode.length === 0) return;
+
+    const lineHeight = 3.8;
+    const padding = 5;
+    const totalBlockHeight = wrappedCode.length * lineHeight + padding * 2;
+
+    // Case 1: Fits entirely on current page
+    if (currentY + totalBlockHeight <= maxY) {
+      pdf.setFillColor(241, 245, 249); // slate-100
+      pdf.setDrawColor(203, 213, 225); // slate-300
+      pdf.roundedRect(marginMm, currentY, contentWidth, totalBlockHeight, 1.5, 1.5, 'FD');
+      pdf.setTextColor(30, 41, 59); // slate-800
+      pdf.text(wrappedCode, marginMm + 4, currentY + padding + 2.5);
+      currentY += totalBlockHeight + 3;
+      return;
+    }
+
+    // Case 2: Multi-page code block - chunk lines safely
+    let codeIdx = 0;
+    while (codeIdx < wrappedCode.length) {
+      // If we don't have room for at least 2 lines of code, start a fresh page
+      if (currentY + 14 > maxY) {
+        forceNewPage(docTitle);
+      }
+
+      const availableHeight = maxY - currentY - 8;
+      const linesToFit = Math.max(1, Math.min(Math.floor(availableHeight / lineHeight), wrappedCode.length - codeIdx));
+      const batch = wrappedCode.slice(codeIdx, codeIdx + linesToFit);
+      const batchHeight = batch.length * lineHeight + 6;
+
+      pdf.setFillColor(241, 245, 249);
+      pdf.setDrawColor(203, 213, 225);
+      pdf.roundedRect(marginMm, currentY, contentWidth, batchHeight, 1.5, 1.5, 'FD');
+
+      pdf.setFont('courier', 'normal');
+      pdf.setFontSize(8);
+      pdf.setTextColor(30, 41, 59);
+      pdf.text(batch, marginMm + 4, currentY + 4.8);
+
+      currentY += batchHeight + 2.5;
+      codeIdx += batch.length;
     }
   };
 
@@ -277,6 +335,9 @@ export async function generateA4PdfFromDocuments(
     const progressPercent = 20 + Math.round(((fileIdx + 1) / files.length) * 75);
     onProgress?.(progressPercent, `Compiling document ${fileIdx + 1} of ${files.length}: ${file.newName}...`);
 
+    // Yield control to browser event loop so UI stays responsive and progress renders smoothly
+    await new Promise((r) => setTimeout(r, 0));
+
     // Force new page for each doc if requested
     if (pageBreakPerDoc && fileIdx > 0 && currentY !== startY) {
       addHeaderFooter(files[fileIdx - 1].newName, currentPage);
@@ -329,49 +390,9 @@ export async function generateA4PdfFromDocuments(
       // Code Block Boundary
       if (trimmed.startsWith('```')) {
         if (inCodeBlock) {
-          // Render accumulated code block
+          // Render accumulated code block safely
           inCodeBlock = false;
-          if (codeBlockLines.length > 0) {
-            const fullCodeText = codeBlockLines.join('\n');
-            pdf.setFont('courier', 'normal');
-            pdf.setFontSize(8);
-            const wrappedCode = pdf.splitTextToSize(fullCodeText, contentWidth - 8);
-            const blockHeight = wrappedCode.length * 3.8 + 8;
-
-            ensureSpace(Math.min(blockHeight, 40), file.newName);
-
-            // Draw code background
-            pdf.setFillColor(241, 245, 249); // slate-100
-            pdf.setDrawColor(203, 213, 225); // slate-300
-            
-            // If code spans multiple pages, handle line by line
-            let codeIndex = 0;
-            while (codeIndex < wrappedCode.length) {
-              const linesToFit = Math.floor((maxY - currentY - 8) / 3.8);
-              if (linesToFit <= 1) {
-                ensureSpace(15, file.newName);
-                continue;
-              }
-
-              const batch = wrappedCode.slice(codeIndex, codeIndex + linesToFit);
-              const batchHeight = batch.length * 3.8 + 6;
-
-              pdf.setFillColor(241, 245, 249);
-              pdf.roundedRect(marginMm, currentY, contentWidth, batchHeight, 1.5, 1.5, 'FD');
-
-              pdf.setFont('courier', 'normal');
-              pdf.setFontSize(8);
-              pdf.setTextColor(30, 41, 59); // slate-800
-              pdf.text(batch, marginMm + 4, currentY + 5);
-
-              currentY += batchHeight + 3;
-              codeIndex += batch.length;
-
-              if (codeIndex < wrappedCode.length) {
-                ensureSpace(15, file.newName);
-              }
-            }
-          }
+          renderCodeSnippet(codeBlockLines, file.newName);
           codeBlockLines = [];
         } else {
           inCodeBlock = true;
@@ -415,21 +436,8 @@ export async function generateA4PdfFromDocuments(
       if (trimmed === '</div>' || trimmed === '</pre>' || trimmed === '</termy>') {
         if (inCodeBlock) {
           inCodeBlock = false;
-          if (codeBlockLines.length > 0) {
-            const fullCodeText = codeBlockLines.join('\n');
-            pdf.setFont('courier', 'normal');
-            pdf.setFontSize(8);
-            const wrappedCode = pdf.splitTextToSize(fullCodeText, contentWidth - 8);
-            const batchHeight = wrappedCode.length * 3.8 + 6;
-            ensureSpace(Math.min(batchHeight, 40), file.newName);
-            pdf.setFillColor(241, 245, 249);
-            pdf.setDrawColor(203, 213, 225);
-            pdf.roundedRect(marginMm, currentY, contentWidth, batchHeight, 1.5, 1.5, 'FD');
-            pdf.setTextColor(30, 41, 59);
-            pdf.text(wrappedCode, marginMm + 4, currentY + 5);
-            currentY += batchHeight + 3;
-            codeBlockLines = [];
-          }
+          renderCodeSnippet(codeBlockLines, file.newName);
+          codeBlockLines = [];
         }
         continue;
       }
@@ -872,17 +880,9 @@ export async function generateA4PdfFromDocuments(
 
     // Flush any pending code block
     if (inCodeBlock && codeBlockLines.length > 0) {
-      const fullCodeText = codeBlockLines.join('\n');
-      pdf.setFont('courier', 'normal');
-      pdf.setFontSize(8);
-      const wrappedCode = pdf.splitTextToSize(fullCodeText, contentWidth - 8);
-      const batchHeight = wrappedCode.length * 3.8 + 6;
-      ensureSpace(batchHeight, file.newName);
-      pdf.setFillColor(241, 245, 249);
-      pdf.roundedRect(marginMm, currentY, contentWidth, batchHeight, 1.5, 1.5, 'FD');
-      pdf.setTextColor(30, 41, 59);
-      pdf.text(wrappedCode, marginMm + 4, currentY + 5);
-      currentY += batchHeight + 3;
+      renderCodeSnippet(codeBlockLines, file.newName);
+      codeBlockLines = [];
+      inCodeBlock = false;
     }
 
     addHeaderFooter(file.newName, currentPage);
